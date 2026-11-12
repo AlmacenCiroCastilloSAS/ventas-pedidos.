@@ -178,6 +178,8 @@ p { margin: 0; }
   display: inline-flex; align-items: center; gap: 6px;
 }
 .chip.sel { background: var(--azul); border-color: var(--azul); color: var(--blanco); }
+.chip.quitar { min-height: 44px; padding: 0 12px 0 14px; font-size: 16px; gap: 8px; }
+.btn-linea.peligro { border-color: var(--terracota); color: var(--terracota); }
 
 /* ---------- Campos ---------- */
 .campo { display: flex; flex-direction: column; gap: 6px; }

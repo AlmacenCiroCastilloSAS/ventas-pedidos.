@@ -77,6 +77,7 @@ const IC = {
   reloj: (t) => I('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', t || 28, 2.5),
   lista: (t) => I('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>', t || 28, 2.5),
   lapiz: (t) => I('<path d="M4 20l4-1 11-11-3-3L5 16z"/>', t || 22, 2.5),
+  x: (t) => I('<path d="M6 6l12 12M18 6L6 18"/>', t || 18, 3),
   deshacer: (t) => I('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', t || 18, 2.5),
   alerta: (t) => I('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>', t || 20, 2.5),
   sinSenal: (t) => I('<path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.7"/><path d="M19 12.9a10 10 0 0 0-2.5-1.7"/><path d="M12 20h.01"/>', t || 20, 2.5),
@@ -298,7 +299,8 @@ function calcular() {
     .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 
   // Recorrido actual del usuario
-  const cerrados = new Set(ov.filter((i) => i.tipo === 'cierre').map((i) => i.datos.id_recorrido));
+  // Recorridos cerrados o anulados en este celular (aunque aún no lleguen a la hoja).
+  const cerrados = new Set(ov.filter((i) => i.tipo === 'cierre' || i.tipo === 'anulacion').map((i) => i.datos.id_recorrido));
   let rec = null;
   const locales = ov.filter((i) => i.tipo === 'recorrido' && !cerrados.has(i.datos.id));
   if (locales.length) {
@@ -323,7 +325,7 @@ function calcular() {
     rec.hist = S.historial.filter((x) => x.id_recorrido === rec.id);
   }
 
-  return { D, productos, prodMap, clientes, cliMap, pedidos: abiertos, rec };
+  return { D, productos, prodMap, clientes, cliMap, pedidos: abiertos, rec, cerrados };
 }
 
 /* ======================================================================== */
@@ -503,7 +505,8 @@ VISTAS.camion = () => {
       <div class="rejilla-2">
         <button type="button" class="kpi amarilla" data-accion="ir" data-v="pedidosRuta"><span class="cifra">${enRuta.length}</span><span class="t">Pedidos pendientes en la ruta</span></button>
         <div class="kpi"><span class="cifra">${rec.hist.length}</span><span class="t">Visitas registradas</span></div>
-      </div>`,
+      </div>
+      ${sinEntregas(rec) ? `<button type="button" class="btn-linea peligro" data-accion="iniciarAnulacion" data-id="${h(rec.id)}">${IC.x(20)} Anular recorrido (abierto por error)</button>` : ''}`,
     pie: `<button type="button" class="btn sec" data-accion="iniciarCierre">Cerrar recorrido y cuadrar</button>`,
   };
 };
@@ -524,8 +527,13 @@ VISTAS.abrir = () => {
       ${camiones.length > 1 ? `<div class="campo"><span class="lbl">Camión</span><div class="chips">${camiones.map((c) =>
         `<button type="button" class="chip ${A.camion === c.nombre ? 'sel' : ''}" data-accion="elegirCamion" data-v="${h(c.nombre)}">${h(c.nombre)}</button>`).join('')}</div></div>`
         : `<p class="tenue">Camión: <b style="color:var(--tinta)">${h(A.camion || 'No hay camiones en Ubicaciones')}</b></p>`}
-      <div class="campo"><span class="lbl">¿Por qué municipios vas?</span><div class="chips">${E.D.municipios.map((m) =>
-        `<button type="button" class="chip ${A.municipios.indexOf(m) >= 0 ? 'sel' : ''}" data-accion="toggleMunicipio" data-v="${h(m)}" aria-pressed="${A.municipios.indexOf(m) >= 0}">${A.municipios.indexOf(m) >= 0 ? IC.check(18) : ''}${h(m)}</button>`).join('')}</div></div>
+      <div class="campo"><label for="muni">¿Por qué municipios vas?</label>
+        ${A.municipios.length ? `<div class="chips">${A.municipios.map((m) =>
+          `<button type="button" class="chip sel quitar" data-accion="toggleMunicipio" data-v="${h(m)}" aria-label="Quitar ${h(m)}">${h(m)} ${IC.x(16)}</button>`).join('')}</div>` : ''}
+        ${E.D.municipios.length > A.municipios.length ? `<select id="muni" data-campo="agregarMunicipio">
+          <option value="">${A.municipios.length ? '+ Agregar otro municipio' : 'Elige un municipio'}</option>
+          ${E.D.municipios.filter((m) => A.municipios.indexOf(m) < 0).map((m) => `<option value="${h(m)}">${h(m)}</option>`).join('')}
+        </select>` : ''}</div>
       ${enRuta.length ? `<div class="tarjeta amarilla">
         <div class="entre"><h3>${enRuta.length} pedido(s) por entregar en la ruta</h3></div>
         <p class="pequeno">${Object.keys(porProd).map((c) => `${h((E.prodMap[c] || {}).nombre || c)}: <b>${fmt(porProd[c])}</b>`).join(' · ')}</p>
@@ -814,8 +822,34 @@ VISTAS.cierre = () => {
   };
 };
 
+/* ---------- Anular un recorrido abierto por error ---------- */
+VISTAS.anular = () => {
+  const E = calcular();
+  const A = S.an;
+  return {
+    barra: barra('Anular recorrido', `${A.camion} · ${fechaCorta(A.fecha)}`),
+    cuerpo: `
+      <div class="tarjeta alerta">
+        <h2>¿Este recorrido se abrió por error?</h2>
+        <p>Al anularlo:</p>
+        <p>• El material cargado vuelve a la bodega.<br>• El recorrido queda en la hoja como <b>Anulado</b>, con tu nombre, la fecha y el motivo. No se borra.<br>• No se pueden registrar entregas en él.</p>
+      </div>
+      <div class="tarjeta blanca" style="gap:6px">
+        <div class="entre"><span class="tenue">Abierto por</span><b>${h(A.empleado)}</b></div>
+        <div class="entre"><span class="tenue">Municipios</span><b style="text-align:right">${h(A.municipios || '–')}</b></div>
+        <span class="tenue" style="margin-top:6px">Cargue que vuelve a la bodega</span>
+        ${A.productos.map((p) => `<div class="entre pequeno"><span>${h((E.prodMap[p.codigo] || {}).nombre || p.codigo)}</span><b>${fmt(p.cargado)}</b></div>`).join('') || '<span class="pequeno">Sin cargue registrado.</span>'}
+      </div>
+      <div class="campo"><label for="motivo">Motivo de la anulación</label>
+        <textarea id="motivo" data-campo="an.motivo" placeholder="Ej.: lo abrí dos veces por error">${h(A.motivo)}</textarea></div>
+      ${A.error ? `<div class="tarjeta alerta"><b>${h(A.error)}</b></div>` : ''}`,
+    pie: `<button type="button" class="btn peligro" data-accion="guardarAnulacion">${IC.x(24)} Anular recorrido</button>
+      <button type="button" class="btn sec" data-accion="atras">No, volver</button>`,
+  };
+};
+
 /* ---------- Pendientes por enviar ---------- */
-const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido' };
+const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido', anulacion: 'Anulación de recorrido' };
 VISTAS.cola = () => {
   const E = calcular();
   const items = S.cola.filter((i) => i.usuario === yo().id).slice().reverse();
@@ -825,6 +859,7 @@ VISTAS.cola = () => {
     if (i.tipo === 'cliente') return d.negocio || d.propietario;
     if (i.tipo === 'recorrido') return `${d.camion} · ${(d.municipios || []).join(', ')}`;
     if (i.tipo === 'cierre') return d.id_recorrido;
+    if (i.tipo === 'anulacion') return `${d.id_recorrido} · Motivo: ${d.motivo}`;
     const c = E.cliMap[d.id_cliente];
     return `${c ? c.nombre : 'Cliente ' + d.id_cliente} · ${fmt(d.lineas.reduce((a, l) => a + l.cantidad, 0))} unidades`;
   };
@@ -913,9 +948,10 @@ VISTAS.admin = () => {
               return `<td class="num" style="${v < 0 ? 'color:var(--terracota);font-weight:700' : ''}">${fmt(v)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
         </section>
         <aside class="lateral">
-          ${(D.recorridos || []).map((r) => `<div class="tarjeta blanca">
+          ${(D.recorridos || []).filter((r) => !E.cerrados.has(r.id)).map((r) => `<div class="tarjeta blanca">
             <div class="entre"><h3>${h(r.camion)} · ${h(r.empleado)}</h3><span class="tenue pequeno">${fechaCorta(r.fecha)}</span></div>
             <span class="tenue pequeno">${h(r.municipios)}</span>
+            ${r.productos.every((p) => !p.entregado) ? `<button type="button" class="btn-borde" style="color:var(--terracota);border-color:var(--terracota)" data-accion="iniciarAnulacion" data-id="${h(r.id)}">Anular (sin entregas)</button>` : ''}
             ${r.productos.map((p) => { const pct = p.cargado ? Math.max(0, (p.saldo / p.cargado) * 100) : 0; return `<div>
               <div class="entre pequeno"><span>${h((E.prodMap[p.codigo] || {}).nombre || p.codigo)}</span><b>${fmt(p.saldo)} / ${fmt(p.cargado)}</b></div>
               <div class="barra-prog ${pct < 25 ? 'baja' : ''}" style="height:10px"><i style="width:${pct}%"></i></div></div>`; }).join('')}
@@ -960,6 +996,7 @@ function iniciarFirma() {
     actual = [punto(e)];
     S.firma.trazos.push(actual);
     ph.hidden = true;
+    limpiarError();
     dibujar(actual);
   };
   cv.onpointermove = (e) => {
@@ -974,6 +1011,14 @@ function iniciarFirma() {
     });
   };
   cv.onpointerup = cv.onpointercancel = () => { actual = null; };
+}
+
+/** Quita el aviso de error de la visita apenas el usuario corrige algo. */
+function limpiarError() {
+  if (!S.b || !S.b.error) return;
+  S.b.error = '';
+  const a = appEl.querySelector('.cuerpo .tarjeta.alerta');
+  if (a) a.remove();
 }
 
 function exportarFirma() {
@@ -1298,7 +1343,42 @@ const ACCIONES = {
   },
 
   filtroAdmin(d) { S.adminFiltro = d.v; render(); },
+
+  /* Anulación */
+  iniciarAnulacion(d) {
+    const E = calcular();
+    let an = null;
+    if (E.rec && E.rec.id === d.id) {
+      an = {
+        id: E.rec.id, camion: E.rec.camion, empleado: yo().nombre, fecha: E.rec.fecha, municipios: E.rec.municipios.join(', '),
+        productos: Object.keys(E.rec.productos).map((c) => ({ codigo: c, cargado: E.rec.productos[c].cargado })).filter((p) => p.cargado > 0),
+      };
+    } else {
+      const r = (E.D.recorridos || []).find((x) => x.id === d.id);
+      if (!r) return;
+      an = { id: r.id, camion: r.camion, empleado: r.empleado, fecha: r.fecha, municipios: r.municipios, productos: r.productos.filter((p) => p.cargado > 0) };
+    }
+    S.an = Object.assign(an, { motivo: '', error: '', origen: vista() === 'admin' ? 'admin' : 'camion' });
+    ir('anular');
+  },
+  async guardarAnulacion() {
+    const A = S.an;
+    A.error = '';
+    if (A.motivo.trim().length < 3) { A.error = 'Escribe el motivo de la anulación.'; return render(); }
+    if (!confirm('¿Anular este recorrido? Quedará registrado como anulado con tu nombre y el motivo.')) return;
+    await encolar('anulacion', { id_recorrido: A.id, fecha_hora: new Date().toISOString(), motivo: A.motivo.trim() });
+    const destino = A.origen === 'admin' ? ['inicio', 'admin'] : ['inicio', 'camion'];
+    S.an = null;
+    aviso('Recorrido anulado. El cargue vuelve a la bodega.');
+    irRaiz(destino);
+  },
 };
+
+/** Un recorrido solo se puede anular si todavía no tiene entregas. */
+function sinEntregas(rec) {
+  return Object.keys(rec.productos).every((c) => !rec.productos[c].entregado) &&
+    !rec.hist.some((x) => x.tipo === 'entrega');
+}
 
 function limite(E, ctx, codigo) {
   if (ctx === 'ab') return Infinity;
@@ -1386,10 +1466,12 @@ appEl.addEventListener('input', (e) => {
   }
   if (campo === 'conteo') { S.ci.conteo[el.dataset.cod] = el.value.trim() === '' ? '' : num(el.value); return; }
   if (campo === 'nota') { S.ci.nota[el.dataset.cod] = el.value; return; }
+  if (campo === 'agregarMunicipio') return; // se maneja en "change"
   if (campo === 'bprod') {
     if (vista() === 'abrir') S.ab.bprod = el.value; else S.b.bprod = el.value;
   } else {
     asignar(campo, el.value);
+    if (campo === 'b.recibe_nombre') limpiarError();
   }
   if (el.dataset.refrescar) refrescarParcial(el.dataset.refrescar);
 });
@@ -1403,6 +1485,9 @@ appEl.addEventListener('change', (e) => {
     obj[el.dataset.cod] = red(Math.min(Math.max(0, num(el.value)), limite(E, el.dataset.ctx, el.dataset.cod)));
     render();
   } else if (campo === 'conteo') {
+    render();
+  } else if (campo === 'agregarMunicipio') {
+    if (el.value && S.ab.municipios.indexOf(el.value) < 0) S.ab.municipios.push(el.value);
     render();
   }
 });
