@@ -848,8 +848,65 @@ VISTAS.anular = () => {
   };
 };
 
+/* ---------- Modificar stock (administrador) ---------- */
+VISTAS.stock = () => {
+  const E = calcular();
+  const D = E.D;
+  const T = S.st;
+  const ubics = D.ubicaciones.filter((u) => u.tipo !== 'Camión');
+  const sistema = (c) => ((((D.stock || {}).productos || {})[c] || {})[T.ubic]) || 0;
+  const lista = filtrarProductos(E.productos, T.bprod);
+  const esEntrada = T.clase === 'entrada';
+  const contados = Object.keys(T.conteo).filter((c) => T.conteo[c] !== '' && T.conteo[c] !== undefined);
+  const conDif = contados.filter((c) => red(num(T.conteo[c]) - sistema(c)) !== 0);
+  const total = unidades(T.cant);
+  const filas = lista.map((p) => {
+    if (esEntrada) {
+      const v = num(T.cant[p.codigo]);
+      return `<div class="prod ${v > 0 ? 'activo' : ''}">
+        <div class="entre"><span class="nombre">${h(p.nombre)}</span><span class="meta">Hay: <b style="color:var(--tinta)">${fmt(sistema(p.codigo))}</b></span></div>
+        ${control('st', p.codigo, v)}</div>`;
+    }
+    const v = T.conteo[p.codigo];
+    const lleno = v !== '' && v !== undefined;
+    const dif = lleno ? red(num(v) - sistema(p.codigo)) : 0;
+    return `<div class="${dif ? 'tarjeta alerta' : 'tarjeta blanca'}" style="padding:12px;gap:6px">
+      <div class="entre"><span class="grow"><b style="font-size:17px">${h(p.nombre)}</b><br>
+        <span class="pequeno tenue">En el sistema: <b style="color:var(--tinta)">${fmt(sistema(p.codigo))}</b> ${h(p.unidad)}</span></span>
+        <label class="sr" for="sc-${h(p.codigo)}">Contado</label>
+        <input id="sc-${h(p.codigo)}" type="text" inputmode="decimal" placeholder="–" value="${h(lleno ? String(v).replace('.', ',') : '')}" data-campo="stconteo" data-cod="${h(p.codigo)}"
+          style="width:84px;height:58px;text-align:center;font-size:24px;font-weight:700;border:3px solid ${dif ? 'var(--terracota)' : 'var(--azul)'};border-radius:12px"></div>
+      ${dif ? `<b style="color:var(--terracota-texto);font-size:16px">${dif < 0 ? `Faltan ${fmt(-dif)}` : `Sobran ${fmt(dif)}`}: se ajustará a ${fmt(num(v))}</b>` : ''}
+    </div>`;
+  }).join('');
+  return {
+    barra: barra('Modificar stock', D._pedidoEn ? `Stock de ${fechaCorta(D._pedidoEn)} ${hora(D._pedidoEn)}` : ''),
+    cuerpo: `
+      <div class="chips">
+        <button type="button" class="chip ${esEntrada ? 'sel' : ''}" data-accion="claseStock" data-v="entrada">Entrada de mercancía</button>
+        <button type="button" class="chip ${esEntrada ? '' : 'sel'}" data-accion="claseStock" data-v="conteo">Ajuste por conteo</button>
+      </div>
+      ${ubics.length > 1 ? `<div class="campo"><label for="stu">Ubicación</label><select id="stu" data-campo="stubic">
+        ${ubics.map((u) => `<option value="${h(u.nombre)}" ${u.nombre === T.ubic ? 'selected' : ''}>${h(u.nombre)}</option>`).join('')}</select></div>`
+        : `<p class="tenue">Ubicación: <b style="color:var(--tinta)">${h(T.ubic)}</b></p>`}
+      <p class="tenue">${esEntrada
+        ? 'Escribe cuánto llegó de cada producto. Se suma a lo que hay.'
+        : 'Escribe solo lo que contaste. El stock queda igual a lo contado; los demás productos no cambian.'}</p>
+      ${E.productos.length > 6 ? buscadorProductos(T.bprod) : ''}
+      <div id="lista-prod" style="display:flex;flex-direction:column;gap:10px">${filas || '<p class="tenue">No hay productos que coincidan.</p>'}</div>
+      <div class="campo"><label for="stn">${esEntrada ? 'Factura o proveedor (opcional)' : 'Motivo del ajuste'}</label>
+        <input id="stn" value="${h(T.nota)}" data-campo="st.nota" placeholder="${esEntrada ? 'Ej.: Factura 4521 Holcim' : 'Ej.: conteo mensual, 3 sacos rotos'}"></div>
+      ${T.error ? `<div class="tarjeta alerta"><b>${h(T.error)}</b></div>` : ''}`,
+    pie: esEntrada
+      ? `<div class="entre" style="font-size:18px"><span>${conCantidad(T.cant).length} producto(s)</span><b>${fmt(total)} unidades</b></div>
+         <button type="button" class="btn" data-accion="guardarStock" ${total > 0 ? '' : 'disabled'}>${IC.check(26)} Registrar entrada</button>`
+      : `<div class="entre" style="font-size:18px"><span>${contados.length} contado(s)</span><b>${conDif.length} con diferencia</b></div>
+         <button type="button" class="btn" data-accion="guardarStock" ${contados.length ? '' : 'disabled'}>${IC.check(26)} Guardar conteo</button>`,
+  };
+};
+
 /* ---------- Pendientes por enviar ---------- */
-const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido', anulacion: 'Anulación de recorrido' };
+const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido', anulacion: 'Anulación de recorrido', bodega: 'Movimiento de bodega' };
 VISTAS.cola = () => {
   const E = calcular();
   const items = S.cola.filter((i) => i.usuario === yo().id).slice().reverse();
@@ -860,6 +917,7 @@ VISTAS.cola = () => {
     if (i.tipo === 'recorrido') return `${d.camion} · ${(d.municipios || []).join(', ')}`;
     if (i.tipo === 'cierre') return d.id_recorrido;
     if (i.tipo === 'anulacion') return `${d.id_recorrido} · Motivo: ${d.motivo}`;
+    if (i.tipo === 'bodega') return `${d.clase === 'entrada' ? 'Entrada' : 'Ajuste por conteo'} · ${d.ubicacion} · ${d.lineas.length} producto(s)`;
     const c = E.cliMap[d.id_cliente];
     return `${c ? c.nombre : 'Cliente ' + d.id_cliente} · ${fmt(d.lineas.reduce((a, l) => a + l.cantidad, 0))} unidades`;
   };
@@ -941,7 +999,8 @@ VISTAS.admin = () => {
               <td><span class="pastilla ${p.estado === 'Parcial' ? 'parcial' : 'pendiente'}">${h(p.estado)}</span></td></tr>`).join('')
               || '<tr><td colspan="5" class="tenue">No hay pedidos en este filtro.</td></tr>'}</tbody>
           </table></div>
-          <h2 style="margin-top:8px">Stock por ubicación</h2>
+          <div class="entre" style="margin-top:8px;flex-wrap:wrap"><h2>Stock por ubicación</h2>
+            <button type="button" class="btn chico" data-accion="iniciarStock">${IC.lapiz(20)} Modificar stock</button></div>
           <div class="tabla-caja"><table><thead><tr><th>Producto</th>${ubic.map((u) => `<th class="num">${h(u)}</th>`).join('')}</tr></thead>
             <tbody>${E.productos.map((p) => `<tr><td>${h(p.nombre)}</td>${ubic.map((u) => {
               const v = ((D.stock.productos || {})[p.codigo] || {})[u] || 0;
@@ -1229,7 +1288,7 @@ const ACCIONES = {
   },
   elegirPedido(d) { S.b.id_pedido = d.id; prepararPendiente(calcular()); render(); },
   cant(d) {
-    const obj = d.ctx === 'ab' ? S.ab.cant : S.b.cant;
+    const obj = objCant(d.ctx);
     const E = calcular();
     let v = red(num(obj[d.cod]) + Number(d.d));
     v = Math.max(0, v);
@@ -1344,6 +1403,39 @@ const ACCIONES = {
 
   filtroAdmin(d) { S.adminFiltro = d.v; render(); },
 
+  /* Stock de bodega (administrador) */
+  iniciarStock() {
+    const E = calcular();
+    const ubics = E.D.ubicaciones.filter((u) => u.tipo !== 'Camión');
+    const pred = ubics.find((u) => u.nombre === E.D.bodega_predeterminada) || ubics[0];
+    S.st = { clase: 'entrada', ubic: pred ? pred.nombre : '', cant: {}, conteo: {}, nota: '', bprod: '', error: '' };
+    ir('stock');
+  },
+  claseStock(d) { S.st.clase = d.v; S.st.error = ''; render(); },
+  async guardarStock() {
+    const E = calcular();
+    const T = S.st;
+    T.error = '';
+    let lineas;
+    if (T.clase === 'entrada') {
+      lineas = conCantidad(T.cant).map((c) => ({ codigo: c, cantidad: red(num(T.cant[c])) }));
+      if (!lineas.length) return;
+      if (!confirm(`¿Registrar la entrada de ${fmt(unidades(T.cant))} unidades en ${T.ubic}?`)) return;
+    } else {
+      const sistema = (c) => ((((E.D.stock || {}).productos || {})[c] || {})[T.ubic]) || 0;
+      lineas = Object.keys(T.conteo).filter((c) => T.conteo[c] !== '' && T.conteo[c] !== undefined)
+        .map((c) => ({ codigo: c, contado: red(num(T.conteo[c])), esperado: sistema(c) }));
+      if (!lineas.length) return;
+      if (T.nota.trim().length < 3) { T.error = 'Escribe el motivo del ajuste.'; return render(); }
+      const dif = lineas.filter((l) => red(l.contado - l.esperado) !== 0).length;
+      if (!confirm(`¿Guardar el conteo? ${dif} producto(s) se ajustarán a lo contado.`)) return;
+    }
+    await encolar('bodega', { id: nuevoId('B'), fecha_hora: new Date().toISOString(), clase: T.clase, ubicacion: T.ubic, nota: T.nota.trim(), lineas });
+    aviso(T.clase === 'entrada' ? 'Entrada registrada.' : 'Conteo guardado. El stock queda igual a lo contado.');
+    S.st = null;
+    irRaiz(['inicio', 'admin']);
+  },
+
   /* Anulación */
   iniciarAnulacion(d) {
     const E = calcular();
@@ -1380,8 +1472,15 @@ function sinEntregas(rec) {
     !rec.hist.some((x) => x.tipo === 'entrega');
 }
 
+/** Dónde se guardan las cantidades según la pantalla: apertura, stock o visita. */
+function objCant(ctx) {
+  if (ctx === 'ab') return S.ab.cant;
+  if (ctx === 'st') return S.st.cant;
+  return S.b.cant;
+}
+
 function limite(E, ctx, codigo) {
-  if (ctx === 'ab') return Infinity;
+  if (ctx === 'ab' || ctx === 'st') return Infinity;
   const B = S.b;
   if (B.accion === 'entrega') return E.rec ? E.rec.disponible(codigo) : 0;
   if (B.accion === 'pendiente') {
@@ -1460,15 +1559,16 @@ appEl.addEventListener('input', (e) => {
   const campo = el.dataset.campo;
   if (!campo) return;
   if (campo === 'cant') {
-    const obj = el.dataset.ctx === 'ab' ? S.ab.cant : S.b.cant;
+    const obj = objCant(el.dataset.ctx);
     obj[el.dataset.cod] = Math.max(0, num(el.value));
     return;
   }
   if (campo === 'conteo') { S.ci.conteo[el.dataset.cod] = el.value.trim() === '' ? '' : num(el.value); return; }
   if (campo === 'nota') { S.ci.nota[el.dataset.cod] = el.value; return; }
   if (campo === 'agregarMunicipio') return; // se maneja en "change"
+  if (campo === 'stconteo') { S.st.conteo[el.dataset.cod] = el.value.trim() === '' ? '' : num(el.value); return; }
   if (campo === 'bprod') {
-    if (vista() === 'abrir') S.ab.bprod = el.value; else S.b.bprod = el.value;
+    if (vista() === 'abrir') S.ab.bprod = el.value; else if (vista() === 'stock') S.st.bprod = el.value; else S.b.bprod = el.value;
   } else {
     asignar(campo, el.value);
     if (campo === 'b.recibe_nombre') limpiarError();
@@ -1481,10 +1581,13 @@ appEl.addEventListener('change', (e) => {
   const campo = el.dataset.campo;
   if (campo === 'cant') {
     const E = calcular();
-    const obj = el.dataset.ctx === 'ab' ? S.ab.cant : S.b.cant;
+    const obj = objCant(el.dataset.ctx);
     obj[el.dataset.cod] = red(Math.min(Math.max(0, num(el.value)), limite(E, el.dataset.ctx, el.dataset.cod)));
     render();
   } else if (campo === 'conteo') {
+    render();
+  } else if (campo === 'stconteo' || campo === 'stubic') {
+    if (campo === 'stubic') S.st.ubic = el.value;
     render();
   } else if (campo === 'agregarMunicipio') {
     if (el.value && S.ab.municipios.indexOf(el.value) < 0) S.ab.municipios.push(el.value);
