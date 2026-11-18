@@ -1,13 +1,14 @@
 // Guarda una copia de la app en el celular para que abra sin señal.
 // Al publicar cambios, subir el número de VERSION para que los celulares
 // reciban el aviso "Hay una actualización".
-const VERSION = 'vp-1.2.0';
+const VERSION = 'vp-1.3.0';
 const ARCHIVOS = [
   './',
   './index.html',
   './css/app.css',
   './js/config.js',
   './js/app.js',
+  './js/contabilidad.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

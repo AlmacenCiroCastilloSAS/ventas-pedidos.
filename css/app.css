@@ -30,6 +30,9 @@
   --terracota-suave: #FDEEE6;
   --radio: 16px;
   --sombra-foco: 0 0 0 4px #FFD54A;
+  --verde: #1F5F3F;
+  --verde-2: #2E7A54;
+  --verde-suave: #E7F3EC;
   font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -256,3 +259,101 @@ td.num, th.num { text-align: right; white-space: nowrap; }
   .cuerpo { padding: 20px 24px; }
   .pie { padding-left: 24px; padding-right: 24px; }
 }
+
+/* ==========================================================================
+   Versión PC y Contabilidad
+   ========================================================================== */
+#app.completo { max-width: none; }
+.modo.conta { background: var(--verde); min-height: 120px; }
+.barra.verde { background: var(--verde); }
+.barra.verde .volver { background: var(--verde-2); }
+.btn.verde { background: var(--verde); }
+.btn.verde[disabled] { background: #9AA6BA; }
+.enlace { border: 0; background: none; padding: 4px 2px; color: var(--azul); font: inherit; font-size: 15px; font-weight: 700; text-decoration: underline; text-align: left; }
+.enlace-txt { font-size: 15px; font-weight: 700; color: var(--azul); }
+.error-txt { color: var(--terracota-texto); font-size: 14px; font-weight: 700; }
+
+/* Inicio en PC: los módulos en dos columnas */
+.cuerpo.inicio-pc { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-content: start; }
+.cuerpo.inicio-pc .saludo { grid-column: 1 / -1; }
+.cuerpo.inicio-pc .modo { min-height: 160px; }
+
+/* Distribución de Contabilidad */
+.cuerpo.conta-cuerpo { padding: 0; gap: 0; background: var(--fondo-2); }
+.conta { display: flex; flex-wrap: wrap; align-items: stretch; flex: 1 1 auto; font-size: 16px; }
+.conta-nav { flex: 1 1 220px; max-width: 260px; background: var(--blanco); border-right: 2px solid var(--linea); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.conta-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 0; background: none; color: var(--tinta); font: inherit; font-weight: 700; text-align: left; }
+.conta-item:hover { background: var(--fondo-2); }
+.conta-item.apagado { color: #6B7385; }
+.conta-item.sel-grupo { background: var(--verde-suave); color: var(--verde); }
+.conta-sub { display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 44px; border: 0; border-radius: 10px; background: none; color: var(--gris); font: inherit; text-align: left; }
+.conta-sub:hover { background: var(--fondo-2); }
+.conta-sub.sel { color: var(--tinta); font-weight: 700; box-shadow: inset 4px 0 0 var(--verde); border-radius: 0 10px 10px 0; }
+.conta-main { flex: 999 1 640px; min-width: 0; padding: 20px 24px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.conta-col { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.conta-lado { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1200px) { .conta-lado { position: sticky; top: 90px; } }
+@media (max-width: 700px) { .conta-nav { max-width: none; border-right: 0; border-bottom: 2px solid var(--linea); } }
+
+.panel { background: var(--blanco); border: 2px solid var(--borde); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.panel.chico { padding: 12px 16px; gap: 6px; }
+.panel h2 { font-size: 20px; }
+.panel h3 { font-size: 17px; }
+.fila-sup { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+.campo-pc { display: flex; flex-direction: column; gap: 6px; }
+.campo-pc label, .campo-pc .lbl { font-size: 15px; font-weight: 700; }
+.campo-pc input, .campo-pc select, .campo-pc textarea { min-height: 48px; border: 2px solid var(--tinta); border-radius: 10px; padding: 0 12px; font-size: 17px; background: var(--blanco); }
+.campo-pc select[disabled] { border-color: var(--borde); background: var(--fondo-2); color: var(--gris-2); }
+.campo-pc textarea { padding: 10px 12px; min-height: 76px; resize: vertical; font-size: 16px; }
+.seg { display: flex; border: 2px solid var(--verde); border-radius: 10px; overflow: hidden; }
+.seg button { min-height: 44px; padding: 0 16px; border: 0; background: var(--blanco); color: var(--verde); font: inherit; font-weight: 700; }
+.seg button.sel { background: var(--verde); color: var(--blanco); }
+.base-caja { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-radius: 12px; background: var(--fondo-2); }
+.base-caja .t { font-size: 14px; color: var(--gris); }
+.base-caja .v { font-size: 24px; }
+.base-caja .fila { flex-wrap: wrap; }
+.pesos-in, .cant-in { min-height: 40px; border: 2px solid var(--borde); border-radius: 8px; padding: 0 8px; font: inherit; text-align: right; background: var(--blanco); }
+.cant-in { width: 72px; }
+.pesos-in { width: 124px; }
+.pesos-in.grande { width: 100%; min-height: 52px; font-size: 20px; font-weight: 700; border-color: var(--tinta); text-align: left; }
+.base-caja .pesos-in.grande { width: 220px; }
+.pesos-in:focus, .cant-in:focus { border-color: var(--azul); }
+.dos-tablas { display: flex; flex-wrap: wrap; gap: 20px; }
+.dos-tablas > div { flex: 1 1 430px; min-width: 0; }
+table.conteo th[scope="row"] { color: var(--tinta); font-size: 15px; white-space: nowrap; }
+table.conteo td, table.conteo th { padding: 6px 8px; vertical-align: middle; }
+table.conteo tr.error input { border-color: var(--terracota); background: var(--terracota-suave); }
+.total-menor { margin-top: 14px; display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-radius: 12px; background: var(--verde-suave); font-weight: 700; }
+.total-menor b { font-size: 22px; }
+.tres-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+
+.plegable { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 48px; padding: 0; border: 0; background: none; text-align: left; font: inherit; color: var(--tinta); width: 100%; }
+.plegable .titulo-panel { display: block; font-size: 20px; font-weight: 700; }
+.plegable .flecha { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; background: var(--verde-suave); color: var(--verde); display: flex; align-items: center; justify-content: center; transition: transform .15s; }
+.plegable .flecha.abierta { transform: rotate(180deg); }
+
+.res-estado { border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 4px; border: 3px solid var(--borde); background: var(--blanco); }
+.res-estado .t { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; }
+.res-estado .cifra-res { font-size: 32px; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.res-estado.cuadra { background: var(--verde-suave); border-color: var(--verde); color: var(--verde); }
+.res-estado.cuadra .pequeno { color: var(--tinta); }
+.res-estado.sobra { background: var(--amarillo-suave); border-color: var(--amarillo-borde); }
+.res-estado.falta { background: var(--terracota-suave); border-color: var(--terracota); color: var(--terracota-texto); }
+.res-estado.vacio .t { color: var(--gris); }
+.conta-lado-res { display: flex; flex-direction: column; gap: 14px; }
+.desglose { padding: 6px 16px; gap: 0; font-size: 15px; }
+.fila-des { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linea); }
+.fila-des b { white-space: nowrap; }
+.fila-des:last-child { border-bottom: 0; }
+.fila-des.fuerte { border-bottom: 2px solid var(--borde); }
+.fila-des.fuerte span { font-weight: 700; }
+.conta-guardar { display: flex; flex-direction: column; gap: 8px; }
+.conta-guardar .btn { min-height: 56px; font-size: 18px; }
+.conta-guardar .btn.chico { min-height: 48px; font-size: 16px; }
+.girando-ic { display: inline-flex; animation: girar 1s linear infinite; }
+
+tr.abierta td { background: var(--verde-suave); }
+.tabla-caja td .enlace { white-space: nowrap; }
+tr.detalle-fila td { background: var(--fondo-2); }
+.detalle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 18px; }
+.detalle-grid > div { display: flex; flex-direction: column; gap: 2px; }

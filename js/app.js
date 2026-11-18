@@ -82,6 +82,11 @@ const IC = {
   alerta: (t) => I('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>', t || 20, 2.5),
   sinSenal: (t) => I('<path d="M2 2l20 20"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.7"/><path d="M19 12.9a10 10 0 0 0-2.5-1.7"/><path d="M12 20h.01"/>', t || 20, 2.5),
   sync: (t) => I('<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/>', t || 18, 2.5),
+  pc: (t) => I('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>', t || 30, 2.2),
+  celular: (t) => I('<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>', t || 30, 2.2),
+  conta: (t) => I('<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 11h2M14 11h2M8 15h2M14 15h2M8 19h2M14 19h2"/>', t || 30, 2.2),
+  billete: (t) => I('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/>', t || 30, 2.2),
+  abajo: (t) => I('<path d="M6 9l6 6 6-6"/>', t || 20, 2.8),
   ajustes: (t) => I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>', t || 22, 2),
 };
 
@@ -137,10 +142,15 @@ const S = {
   ultimo: null,         // último registro guardado (pantalla "listo")
   adminFiltro: 'todos',
   ultimaVista: '',
+  version: null,        // 'celular' | 'pc' (se elige una vez por dispositivo)
+  caja: null,           // borrador del cuadre de caja (Contabilidad, solo PC)
+  cajaHist: null,       // historial de cuadres descargado
 };
 
 const yo = () => (S.sesion ? S.sesion.usuario : null);
 const esAdmin = () => !!(yo() && yo().rol === 'Administrador');
+const esPC = () => S.version === 'pc';
+function aplicarVersion() { document.body.classList.toggle('pc', esPC()); }
 const guardarCola = () => Almacen.guardar('cola', S.cola);
 const misPendientes = () => S.cola.filter((i) => i.usuario === (yo() && yo().id) && i.estado !== 'enviado');
 
@@ -371,7 +381,7 @@ function barra(titulo, sub, opciones) {
   const o = opciones || {};
   const volver = o.volver === false ? '' :
     `<button type="button" class="volver" data-accion="${o.accionVolver || 'atras'}" aria-label="Volver">${IC.atras()}</button>`;
-  return `<header class="barra ${o.simple ? 'simple' : ''}">${volver}
+  return `<header class="barra ${o.simple ? 'simple' : ''} ${o.clase || ''}">${volver}
     <div class="titulos"><span class="titulo">${h(titulo)}</span>${sub ? `<span class="sub">${h(sub)}</span>` : ''}</div>
     ${o.sinChip ? '' : chip()}</header>`;
 }
@@ -443,9 +453,11 @@ VISTAS.inicio = () => {
   const u = yo();
   const pend = misPendientes().length;
   return {
-    barra: barra('Ventas y Pedidos', u.nombre, { volver: false }),
+    ancho: esPC(),
+    clase: esPC() ? 'inicio-pc' : '',
+    barra: barra('Ventas y Pedidos', u.nombre + (esPC() ? ' · Versión PC' : ''), { volver: false }),
     cuerpo: `
-      <div style="padding-top:6px;display:flex;flex-direction:column;gap:6px">
+      <div class="saludo" style="padding-top:6px;display:flex;flex-direction:column;gap:6px">
         <h1>Hola, ${h(u.nombre.split(' ')[0])}</h1>
         <p class="tenue" style="font-size:20px">¿Dónde vas a trabajar hoy?</p>
       </div>
@@ -457,6 +469,11 @@ VISTAS.inicio = () => {
         ${IC.tienda(56)}
         <span><span class="nombre">Punto de venta</span> <span class="etiqueta">Próximamente</span><br><span class="desc">Entregas en el local y desde bodega</span></span>
       </button>
+      ${esPC() ? `<button type="button" class="modo conta" data-accion="irCaja">
+        <span class="fila">${IC.conta(40)}<span><span class="nombre" style="font-size:26px">Contabilidad</span><br><span class="desc">Cuadre de caja con Siigo</span></span></span>
+      </button>` : `<button type="button" class="modo conta" disabled aria-disabled="true">
+        <span class="fila">${IC.conta(40)}<span><span class="nombre" style="font-size:26px">Contabilidad</span> <span class="etiqueta">Solo en PC</span><br><span class="desc">En celular estará disponible más adelante</span></span></span>
+      </button>`}
       ${esAdmin() ? `<button type="button" class="modo admin" data-accion="ir" data-v="admin">
         <span class="fila">${IC.panel(40)}<span><span class="nombre" style="font-size:26px">Panel de control</span><br><span class="desc">Pedidos, recorridos y stock</span></span></span>
       </button>` : ''}`,
@@ -940,6 +957,21 @@ VISTAS.cola = () => {
   };
 };
 
+/* ---------- Elegir versión ---------- */
+VISTAS.version = () => {
+  const sugerida = window.innerWidth >= 900 ? 'pc' : 'celular';
+  const opcion = (id, icono, nombre, desc) => `<button type="button" class="opcion ${S.version === id ? 'sel' : ''}" data-accion="elegirVersion" data-v="${id}" style="min-height:96px;gap:16px;justify-content:flex-start">
+      <span style="color:var(--azul)">${icono}</span>
+      <span class="grow"><span class="n">${nombre}${sugerida === id && !S.version ? ' <span class="pastilla ok">Sugerida para esta pantalla</span>' : ''}</span><span class="d">${desc}</span></span></button>`;
+  return {
+    barra: barra('¿Dónde usarás la app?', 'Se guarda en este dispositivo', { volver: !!S.version, sinChip: true }),
+    cuerpo: `
+      <p style="font-size:19px">Elige la versión que mejor se ve en este dispositivo. Puedes cambiarla después en <b>Ajustes</b>.</p>
+      ${opcion('celular', IC.celular(44), 'Celular', 'Camión y punto de venta, con botones grandes para usar con el dedo.')}
+      ${opcion('pc', IC.pc(44), 'PC', 'Pantalla ancha. Incluye Contabilidad (cuadre de caja con Siigo).')}`,
+  };
+};
+
 /* ---------- Ajustes ---------- */
 VISTAS.ajustes = () => {
   const u = yo();
@@ -953,6 +985,14 @@ VISTAS.ajustes = () => {
         <div class="entre"><span class="tenue">Datos actualizados</span><b>${D ? `${fechaCorta(D._pedidoEn)} ${hora(D._pedidoEn)}` : 'Nunca'}</b></div>
         <div class="entre"><span class="tenue">Clientes · Productos</span><b>${D ? `${D.clientes.length} · ${D.productos.length}` : '–'}</b></div>
         <div class="entre"><span class="tenue">Versión de la app</span><b>${h(CFG.VERSION)}</b></div>
+      </div>
+      <div class="tarjeta blanca">
+        <h3>Versión en este dispositivo</h3>
+        <div class="chips">
+          <button type="button" class="chip ${!esPC() ? 'sel' : ''}" data-accion="elegirVersion" data-v="celular" aria-pressed="${!esPC()}">${IC.celular(20)} Celular</button>
+          <button type="button" class="chip ${esPC() ? 'sel' : ''}" data-accion="elegirVersion" data-v="pc" aria-pressed="${esPC()}">${IC.pc(20)} PC</button>
+        </div>
+        <span class="tenue pequeno">Contabilidad solo está disponible en la versión PC.</span>
       </div>
       <button type="button" class="btn sec" data-accion="sincronizarYa">${IC.sync(24)} Actualizar datos ahora</button>
       <button type="button" class="btn sec" data-accion="ir" data-v="cola">Ver envíos a la hoja</button>
@@ -1179,6 +1219,15 @@ const ACCIONES = {
   },
 
   sincronizarYa: () => sincronizar({ manual: true }),
+
+  async elegirVersion(d) {
+    const primera = !S.version;
+    S.version = d.v === 'pc' ? 'pc' : 'celular';
+    aplicarVersion();
+    await Almacen.guardar('version', S.version);
+    if (primera || vista() === 'version') irRaiz(['inicio']); else render();
+    aviso(S.version === 'pc' ? 'Versión PC activada.' : 'Versión celular activada.');
+  },
 
   actualizarApp() {
     S.pidioActualizar = true;
@@ -1497,10 +1546,12 @@ function limite(E, ctx, codigo) {
 
 function render() {
   if (!S.sesion && vista() !== 'login') S.pila = ['login'];
-  const nombre = vista();
+  // La primera vez en este dispositivo se elige la versión (celular o PC).
+  const nombre = S.sesion && !S.version ? 'version' : vista();
   const fn = VISTAS[nombre] || VISTAS.inicio;
   const v = fn();
   appEl.classList.toggle('ancho', !!v.ancho);
+  appEl.classList.toggle('completo', !!v.completo);
   const html = htmlVista(v);
   S.htmlSinChip = sinChip(html);
   appEl.innerHTML = html;
@@ -1629,9 +1680,13 @@ function registrarServiceWorker() {
 
 async function arrancar() {
   try {
-    const [sesion, datos, cola, historial] = await Promise.all([
+    const [sesion, datos, cola, historial, version, caja] = await Promise.all([
       Almacen.leer('sesion'), Almacen.leer('datos'), Almacen.leer('cola'), Almacen.leer('historial'),
+      Almacen.leer('version'), Almacen.leer('caja'),
     ]);
+    S.version = version || null;
+    S.caja = caja || null;
+    aplicarVersion();
     S.sesion = sesion || null;
     S.datos = datos || null;
     S.cola = cola || [];
