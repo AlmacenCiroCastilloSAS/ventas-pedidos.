@@ -16,7 +16,7 @@ const DENOMS = [
   { k: '10000', d: 10000, n: '$ 10.000', t: 'b' },
   { k: '5000', d: 5000, n: '$ 5.000', t: 'b' },
   { k: '2000', d: 2000, n: '$ 2.000', t: 'b' },
-  { k: '1000b', d: 1000, n: '$ 1.000 antiguo', t: 'b' },
+  { k: '1000b', d: 1000, n: '$ 1.000', t: 'b' },
   { k: '1000', d: 1000, n: '$ 1.000', t: 'm' },
   { k: '500', d: 500, n: '$ 500', t: 'm' },
   { k: '200', d: 200, n: '$ 200', t: 'm' },
@@ -331,8 +331,9 @@ VISTAS.caja = () => {
           <section class="panel">
             <div class="entre" style="flex-wrap:wrap;align-items:baseline">
               <h2>Caja menor · conteo de billetes y monedas</h2>
-              <span class="pequeno tenue">Escribe la cantidad o el valor. Enter pasa a la siguiente casilla.</span>
+              <button type="button" class="btn verde chico" data-accion="conteoGrande">${IC.billete(22)} Contar en pantalla grande</button>
             </div>
+            <span class="pequeno tenue">Escribe la cantidad o el valor. Enter pasa a la siguiente casilla. Si la pantalla está lejos de los billetes, usa <b>Contar en pantalla grande</b>.</span>
             <div class="dos-tablas">
               <div>${htmlTablaConteo(C, K, 'b')}</div>
               <div>${htmlTablaConteo(C, K, 'm')}
@@ -399,6 +400,155 @@ function refrescarCaja() {
 
 /* --------------------------------------------------- Historial de cuadres */
 
+/** "$20000 x38 = 760000; $1000 billete = 7000; $500 = 11500" → billetes y monedas con cantidad y valor. */
+function leerConteoTexto(texto) {
+  const billetes = [], monedas = [];
+  String(texto || '').split(';').forEach((p) => {
+    const m = /^\s*\$\s*(\d+)(?:\s+(billete|antiguo))?(?:\s+x(\d+))?\s*=\s*([\d.]+)\s*$/.exec(p);
+    if (!m) return;
+    const den = Number(m[1]), val = Number(m[4]);
+    const cant = m[3] ? Number(m[3]) : den ? Math.round(val / den) : 0;
+    const esBillete = den >= 2000 || !!m[2];
+    (esBillete ? billetes : monedas).push({ den, cant, val });
+  });
+  const orden = (a, b) => b.den - a.den;
+  return { billetes: billetes.sort(orden), monedas: monedas.sort(orden) };
+}
+
+function htmlDetalleHist(x, lista) {
+  const fila = (t, v, extra) => `<div class="h-fila ${extra || ''}"><span>${t}</span><b>${v}</b></div>`;
+  const quien = `<section class="h-meta">
+      <span><span class="tenue">Guardado por</span> <b>${h(x.guardadoPor || '—')}</b></span>
+      <span><span class="tenue">Cuándo</span> <b>${x.guardadoEl ? h(fechaCorta(x.guardadoEl) + ' · ' + hora(x.guardadoEl)) : '—'}</b></span>
+      <span><span class="tenue">Base</span> <b>${x.baseManual ? 'escrita a mano' : 'automática'}</b></span>
+      ${x.acumulada !== null ? `<span><span class="tenue">Diferencia acumulada de los cierres</span> <b>${conSigno(x.acumulada)}</b></span>` : ''}
+      <span><span class="tenue">Observación</span> <b>${h(x.observacion || '—')}</b></span>
+    </section>`;
+  if (x.neto === null) {
+    return `<div class="h-detalle"><p style="font-size:17px">Base inicial escrita a mano: <b>${pesos(x.contado)}</b>. No tiene conteo detallado ni datos de Siigo.</p>${quien}</div>`;
+  }
+  const baseDe = lista.find((y) => y.tipo === 'Cierre' && y.fecha < x.fecha);
+  const debe = r2((x.base || 0) + (x.neto || 0));
+  const dif = x.diferencia || 0;
+  const cuadra = Math.abs(dif) < 0.005;
+  const partes = [['Caja fuerte', x.cajaFuerte, '#0B3D91'], ['Cajón', x.cajon, '#E0B341'], ['Caja menor', x.cajaMenor, '#1F5F3F'], ['Monedas (reserva)', x.monedas, '#9A3412']];
+  const total = x.contado || 0;
+  const barra = partes.filter((p) => p[1] > 0).map((p) => `<div style="width:${Math.max(0.6, (p[1] / total) * 100)}%;background:${p[2]}"></div>`).join('');
+  const den = leerConteoTexto(x.conteo);
+  const filasDen = (lista2) => lista2.map((d) => `<tr><td><b>${pesos(d.den)}</b></td><td class="num">${d.cant}</td><td class="num"><b>${pesos(d.val)}</b></td></tr>`).join('');
+  const sub = (lista2) => lista2.reduce((a, d) => a + d.val, 0);
+  return `<div class="h-detalle">
+    <section class="h-bloque">
+      <h3>1 · Cómo se cuadró</h3>
+      <div class="h-cuenta">
+        <div class="h-caja"><span>Base al abrir</span><b>${pesos(x.base)}</b>${baseDe ? `<span class="pequeno">Cierre del ${fechaCortaISO(baseDe.fecha)}</span>` : x.baseManual ? '<span class="pequeno">Escrita a mano</span>' : ''}</div>
+        <span class="h-op mas" aria-hidden="true">+</span>
+        <div class="h-caja"><span>Entradas Siigo</span><b class="txt-verde">${pesos(x.entradas)}</b></div>
+        <span class="h-op menos" aria-hidden="true">−</span>
+        <div class="h-caja"><span>Salidas Siigo</span><b class="txt-terracota">${pesos(x.salidas)}</b></div>
+        <span class="h-op" aria-hidden="true">=</span>
+        <div class="h-caja fuerte"><span>Debe haber</span><b>${pesos(debe)}</b></div>
+        <div class="h-caja res ${cuadra ? 'cuadra' : dif > 0 ? 'sobra' : 'falta'}"><span>Se contaron</span><b>${pesos(total)}</b>
+          <span class="pequeno"><b>${cuadra ? 'Diferencia $ 0 · cuadra' : (dif > 0 ? 'Sobran ' : 'Faltan ') + pesos(Math.abs(dif))}</b></span></div>
+      </div>
+      ${x.aumento !== null ? `<span class="tenue">El efectivo ${x.aumento >= 0 ? 'aumentó' : 'disminuyó'} <b style="color:var(--tinta)">${pesos(Math.abs(x.aumento))}</b> ${x.tipo === 'Parcial' ? 'hasta las ' + h(x.hora) : 'durante el día'}.</span>` : ''}
+    </section>
+    <div class="h-dos">
+      <section class="h-bloque">
+        <h3>2 · Dónde está el efectivo</h3>
+        <div class="h-barra" aria-hidden="true">${barra}</div>
+        <div class="h-lista">
+          ${partes.map((p) => `<div class="h-fila ${p[1] > 0 ? '' : 'apagada'}"><span><i style="background:${p[1] > 0 ? p[2] : 'transparent'};border-color:${p[2]}"></i>${p[0]}</span><b>${pesos(p[1] || 0)}</b></div>`).join('')}
+          ${fila('Total', pesos(total), 'total')}
+        </div>
+      </section>
+      <section class="h-bloque">
+        <h3>3 · Caja menor, billete por billete</h3>
+        ${den.billetes.length || den.monedas.length ? `<div class="h-tabla"><table>
+          <thead><tr><th>Denominación</th><th class="num">Cantidad</th><th class="num">Valor</th></tr></thead>
+          <tbody>
+            ${den.billetes.length ? `<tr class="grupo"><td colspan="3">Billetes</td></tr>${filasDen(den.billetes)}
+              <tr class="subt"><td colspan="2">Subtotal billetes</td><td class="num"><b>${pesos(sub(den.billetes))}</b></td></tr>` : ''}
+            ${den.monedas.length ? `<tr class="grupo monedas"><td colspan="3">Monedas</td></tr>${filasDen(den.monedas)}
+              <tr class="subt"><td colspan="2">Subtotal monedas</td><td class="num"><b>${pesos(sub(den.monedas))}</b></td></tr>` : ''}
+            <tr class="tot"><td colspan="2">Total caja menor</td><td class="num"><b>${pesos(x.cajaMenor || 0)}</b></td></tr>
+          </tbody></table></div>
+          <span class="pequeno tenue">Solo se muestran las denominaciones que tenían dinero.</span>`
+        : '<p class="tenue">Este cuadre no tiene el detalle de billetes y monedas.</p>'}
+      </section>
+    </div>
+    ${htmlMovsHist(x)}
+    ${quien}
+  </div>`;
+}
+
+const claveHist = (x) => x.fecha + x.tipo + x.hora;
+
+function htmlMovsHist(x) {
+  const e = (S.cajaMovsHist || {})[claveHist(x)] || {};
+  const abierto = S.cajaHistMovsAbierto !== false;
+  const d = e.datos;
+  let resumen = 'Cargando…';
+  if (e.error) resumen = 'No se pudieron cargar';
+  else if (d && !d.existe) resumen = 'Sin movimientos guardados';
+  else if (d) {
+    const ent = d.movimientos.reduce((a, m) => a + m.entrada, 0), sal = d.movimientos.reduce((a, m) => a + m.salida, 0);
+    const al = d.movimientos.filter((m) => m.alerta).length;
+    resumen = `${d.movimientos.length} movimiento(s) · entradas ${pesos(ent)} · salidas ${pesos(sal)}${al ? ` · ${al} alerta(s)` : ''}`;
+  }
+  let cuerpo = '';
+  if (abierto) {
+    if (e.error) cuerpo = `<div class="tarjeta alerta" style="padding:10px 12px"><b class="pequeno">${h(e.error)}</b>
+      <button type="button" class="enlace" data-accion="histMovsReintentar" data-k="${h(claveHist(x))}">Intentar de nuevo</button></div>`;
+    else if (!d) cuerpo = '<p class="tenue">Cargando los movimientos guardados…</p>';
+    else if (!d.existe) cuerpo = `<div class="tarjeta amarilla" style="padding:12px 14px;gap:4px"><b>Este cuadre no tiene sus movimientos guardados.</b>
+      <span class="pequeno">Se guardó antes de que la app guardara los movimientos. Para traerlos, en la hoja usa <b>Siigo › Recuperar movimientos de cuadres ya guardados</b>.</span></div>`;
+    else if (!d.movimientos.length) cuerpo = '<p class="tenue">Siigo no tenía movimientos de caja para este cuadre.</p>';
+    else cuerpo = `<div class="h-tabla movs"><table>
+        <thead><tr><th>Comprobante</th><th>Tercero</th><th>Forma de pago</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
+        <tbody>${d.movimientos.map((m) => `<tr>
+          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td>${h(m.formaPago)}</td>
+          <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num">${m.salida ? pesos(m.salida) : ''}</td>
+          <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <span class="pequeno tenue">Así estaban en Siigo cuando se guardó el cuadre${d.guardadoEl ? ' (' + h(fechaCorta(d.guardadoEl) + ' · ' + hora(d.guardadoEl)) + ')' : ''}.</span>`;
+  }
+  return `<section class="h-bloque" id="h-movs">
+    <button type="button" class="plegable" data-accion="histMovs" aria-expanded="${abierto}">
+      <span class="flecha ${abierto ? 'abierta' : ''}">${IC.abajo(20)}</span>
+      <span class="grow"><span class="titulo-panel" style="font-size:19px">4 · Movimientos de Siigo</span><span class="tenue pequeno">${h(resumen)}</span></span>
+      <span class="enlace-txt">${abierto ? 'Ocultar' : 'Mostrar'}</span>
+    </button>
+    ${cuerpo}
+  </section>`;
+}
+
+async function cargarMovsHist(x, forzar) {
+  S.cajaMovsHist = S.cajaMovsHist || {};
+  const k = claveHist(x);
+  const e = S.cajaMovsHist[k];
+  if (x.neto === null || (e && (e.datos || e.cargando) && !forzar)) return;
+  S.cajaMovsHist[k] = { cargando: true };
+  refrescarMovsHist();
+  try {
+    const r = await api('movimientosCuadre', { fecha: x.fecha, hora: x.hora, tipo: x.tipo });
+    S.cajaMovsHist[k] = { datos: r };
+  } catch (err) {
+    S.cajaMovsHist[k] = { error: err.codigo === 'RED' ? 'Sin conexión: no se pudieron traer los movimientos.' : err.message };
+  }
+  refrescarMovsHist();
+}
+
+function refrescarMovsHist() {
+  if (vista() !== 'cajaHist') return;
+  const x = (S.cajaHist || []).find((y) => claveHist(y) === S.cajaHistAbierta);
+  const viejo = document.getElementById('h-movs');
+  if (!x || !viejo) return;
+  const t = document.createElement('template');
+  t.innerHTML = htmlMovsHist(x).trim();
+  viejo.replaceWith(t.content.firstElementChild);
+}
+
 VISTAS.cajaHist = () => {
   if (!esPC()) return soloPC();
   const lista = S.cajaHist || [];
@@ -407,33 +557,25 @@ VISTAS.cajaHist = () => {
   const ultimoCierre = lista.find((x) => x.tipo === 'Cierre');
   const hoy = lista.filter((x) => x.fecha === hoyISO());
   const chipF = (id, t) => `<button type="button" class="chip ${f === id ? 'sel' : ''}" aria-pressed="${f === id}" data-accion="histFiltro" data-v="${id}">${t}</button>`;
-  const difTxt = (x) => {
-    if (x.diferencia === null) return '<span class="pastilla">Base inicial</span>';
-    if (Math.abs(x.diferencia) < 0.005) return '<span class="pastilla ok">Cuadra</span>';
-    return `<span class="pastilla ${x.diferencia > 0 ? 'pendiente' : 'error'}">${x.diferencia > 0 ? 'Sobran ' : 'Faltan '}${pesos(Math.abs(x.diferencia))}</span>`;
+  const estado = (x) => {
+    if (x.diferencia === null) return '<span class="h-estado base">Base inicial</span>';
+    if (Math.abs(x.diferencia) < 0.005) return `<span class="h-estado cuadra">${IC.check(18)} Cuadra</span>`;
+    return `<span class="h-estado ${x.diferencia > 0 ? 'sobra' : 'falta'}">${x.diferencia > 0 ? 'Sobran ' : 'Faltan '}${pesos(Math.abs(x.diferencia))}</span>`;
   };
-  const filas = vis.map((x, i) => {
-    const abierta = S.cajaHistAbierta === x.fecha + x.tipo + x.hora;
-    return `<tr class="${abierta ? 'abierta' : ''}">
-      <td><button type="button" class="enlace" data-accion="histFila" data-k="${h(x.fecha + x.tipo + x.hora)}" aria-expanded="${abierta}"><b>${h(fechaLarga(x.fecha))}</b>${x.hora ? ' · ' + h(x.hora) : ''}</button></td>
-      <td>${h(x.tipo === 'Parcial' ? 'Corte parcial' : 'Cierre')}</td>
-      <td class="num">${x.base !== null ? pesos(x.base) : '—'}</td>
-      <td class="num"><b>${pesos(x.contado)}</b></td>
-      <td class="num">${x.aumento !== null ? conSigno(x.aumento) : '—'}</td>
-      <td class="num">${x.neto !== null ? pesos(x.neto) : '—'}</td>
-      <td>${difTxt(x)}</td>
-      <td class="num">${x.acumulada !== null ? conSigno(x.acumulada) : '—'}</td>
-      <td class="tenue">${h(x.observacion)}</td>
-    </tr>${abierta ? `<tr class="detalle-fila"><td colspan="9"><div class="detalle-grid">
-      <div><span class="tenue pequeno">Caja menor</span><b>${x.cajaMenor !== null ? pesos(x.cajaMenor) : '—'}</b></div>
-      <div><span class="tenue pequeno">Cajón</span><b>${x.cajon !== null ? pesos(x.cajon) : '—'}</b></div>
-      <div><span class="tenue pequeno">Caja fuerte</span><b>${x.cajaFuerte !== null ? pesos(x.cajaFuerte) : '—'}</b></div>
-      <div><span class="tenue pequeno">Monedas</span><b>${x.monedas !== null ? pesos(x.monedas) : '—'}</b></div>
-      <div><span class="tenue pequeno">Entradas / salidas Siigo</span><b>${x.entradas !== null ? pesos(x.entradas) + ' / ' + pesos(x.salidas) : '—'}</b></div>
-      <div><span class="tenue pequeno">Guardado por</span><b>${h(x.guardadoPor || '—')}${x.guardadoEl ? ' · ' + fechaCorta(x.guardadoEl) + ' ' + hora(x.guardadoEl) : ''}</b></div>
-      <div><span class="tenue pequeno">Base</span><b>${x.baseManual ? 'Escrita a mano' : 'Automática'}</b></div>
-      <div style="grid-column:1/-1"><span class="tenue pequeno">Billetes y monedas</span><b>${h(x.conteo || 'Sin detalle')}</b></div>
-    </div></td></tr>` : ''}`;
+  const tarjetas = vis.map((x) => {
+    const k = x.fecha + x.tipo + x.hora;
+    const abierta = S.cajaHistAbierta === k;
+    const tipo = x.neto === null ? 'Base inicial (escrita a mano)' : x.tipo === 'Parcial' ? 'Corte parcial · ' + x.hora : 'Cierre del día' + (x.guardadoEl ? ' · ' + hora(x.guardadoEl) : '');
+    return `<article class="h-tarjeta ${abierta ? 'abierta' : ''}">
+      <button type="button" class="h-cabeza" data-accion="histFila" data-k="${h(k)}" aria-expanded="${abierta}">
+        <span class="h-fecha"><b>${h(fechaLarga(x.fecha))}</b><span>${h(tipo)}</span></span>
+        <span class="h-contado"><span>Efectivo contado</span><b>${pesos(x.contado)}</b></span>
+        ${estado(x)}
+        <span class="grow"></span>
+        <span class="h-ver">${abierta ? 'Ocultar detalle' : 'Ver detalle'} <span class="${abierta ? 'gira' : ''}" style="display:inline-flex">${IC.abajo(20)}</span></span>
+      </button>
+      ${abierta ? htmlDetalleHist(x, lista) : ''}
+    </article>`;
   }).join('');
   return {
     completo: true,
@@ -441,26 +583,133 @@ VISTAS.cajaHist = () => {
     barra: barra('Contabilidad', 'Historial de cuadres', { clase: 'verde' }),
     cuerpo: `<div class="conta">
       ${navConta('cajaHist')}
-      <div class="conta-main" id="hist-cuerpo"><div class="conta-col" style="flex-basis:100%">
+      <div class="conta-main" id="hist-cuerpo"><div class="conta-col" style="flex-basis:100%;max-width:1200px">
         <div class="kpis">
           <div class="kpi"><span class="t">Último cierre${ultimoCierre ? ' · ' + fechaCortaISO(ultimoCierre.fecha) : ''}</span><span class="cifra" style="font-size:28px">${ultimoCierre ? pesos(ultimoCierre.contado) : '—'}</span><span class="pequeno">Base de caja del día siguiente</span></div>
           <div class="kpi amarilla"><span class="t">Diferencia acumulada</span><span class="cifra" style="font-size:28px">${ultimoCierre && ultimoCierre.acumulada !== null ? conSigno(ultimoCierre.acumulada) : '—'}</span><span class="pequeno">Suma de las diferencias de los cierres</span></div>
           <div class="kpi"><span class="t">Hoy · ${fechaCortaISO(hoyISO())}</span><span class="cifra" style="font-size:28px">${hoy.length ? hoy.length + ' guardado(s)' : 'Nada aún'}</span><span class="pequeno">${hoy.some((x) => x.tipo === 'Cierre') ? 'El cierre ya está guardado' : 'Falta guardar el cierre'}</span></div>
         </div>
-        <section class="panel">
-          <div class="entre" style="flex-wrap:wrap"><h2>Cuadres guardados</h2>
-            <div class="chips">${chipF('todos', 'Todos')}${chipF('cierres', 'Solo cierres')}${chipF('diferencia', 'Con diferencia')}</div></div>
-          ${S.cajaHistError ? `<div class="tarjeta alerta" style="padding:10px 12px"><b class="pequeno">${h(S.cajaHistError)}</b></div>` : ''}
-          ${!S.cajaHist && S.cajaHistCargando ? '<p class="tenue">Cargando historial…</p>' : `<div class="tabla-caja"><table>
-            <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Base</th><th class="num">Contado</th><th class="num">Aumento</th><th class="num">Neto Siigo</th><th>Diferencia</th><th class="num">Acumulada</th><th>Observación</th></tr></thead>
-            <tbody>${filas || '<tr><td colspan="9" class="tenue">No hay cuadres en este filtro.</td></tr>'}</tbody></table></div>`}
-          <p class="pequeno tenue">Haz clic en la fecha para ver el conteo, quién lo guardó y el detalle.</p>
-        </section>
+        <div class="entre" style="flex-wrap:wrap"><h2 style="font-size:24px">Cuadres guardados</h2>
+          <div class="chips">${chipF('todos', 'Todos')}${chipF('cierres', 'Solo cierres')}${chipF('diferencia', 'Con diferencia')}</div></div>
+        ${S.cajaHistError ? `<div class="tarjeta alerta" style="padding:10px 12px"><b class="pequeno">${h(S.cajaHistError)}</b></div>` : ''}
+        ${!S.cajaHist && S.cajaHistCargando ? '<p class="tenue">Cargando historial…</p>' : tarjetas || '<p class="tenue">No hay cuadres en este filtro.</p>'}
+        <p class="pequeno tenue">Toca cualquier cuadre para ver o esconder su detalle. Solo uno queda abierto a la vez.</p>
         <div><button type="button" class="btn verde chico" data-accion="irCaja">${IC.billete(22)} Hacer un cuadre</button></div>
       </div></div>
     </div>`,
   };
 };
+
+/* ------------------------------------------- Conteo uno por uno, en grande */
+
+const plural = (x) => (x.t === 'b' ? 'billetes' : 'monedas');
+function idxGrande(C) { return Math.min(Math.max(Number(C.gIdx) || 0, 0), DENOMS.length - 1); }
+function tieneDato(c) { return !!c && ((c.cantidad !== '' && c.cantidad !== undefined) || (c.valor !== '' && c.valor !== undefined)); }
+
+function htmlEquivale(C, K, x, modo) {
+  const malo = K.malos[x.k];
+  if (malo) return `<div class="g-eq error">${IC.alerta(30)} ${h(malo)}</div>`;
+  const v = K.subs[x.k] || 0;
+  if (modo === 'cantidad') return `<div class="g-eq ${v ? 'ok' : 'vacio'}">= ${pesos(v)}</div>`;
+  if (!v) return '<div class="g-eq vacio">Escribe el valor, o deja $ 0 si no hay</div>';
+  const n = v / x.d;
+  return `<div class="g-eq ok">${IC.check(34)} Equivale a ${n} ${n === 1 ? plural(x).slice(0, -1) : plural(x)}</div>`;
+}
+
+function htmlLadoGrande(C, K, i) {
+  const grupo = (t, titulo) => {
+    const items = DENOMS.map((x, j) => ({ x, j })).filter((o) => o.x.t === t);
+    const listos = items.filter((o) => tieneDato(C.conteo[o.x.k]) || (C.gVistos || {})[o.x.k]).length;
+    return `<div class="g-grupo"><h2>${titulo}</h2><span>${listos} de ${items.length} ${t === 'b' ? 'listos' : 'listas'}</span></div>
+      ${items.map(({ x, j }) => {
+        const listo = tieneDato(C.conteo[x.k]) || (C.gVistos || {})[x.k];
+        const malo = K.malos[x.k];
+        const est = j === i ? 'actual' : malo ? 'malo' : listo ? 'listo' : '';
+        return `<button type="button" class="g-item ${est}" data-accion="gIr" data-i="${j}" ${j === i ? 'aria-current="step"' : ''}>
+          <span class="g-marca">${est === 'listo' ? IC.check(20, 3.5) : est === 'actual' ? '›' : est === 'malo' ? '!' : ''}</span>
+          <span class="grow">${h(x.n)}</span>
+          <span class="g-v">${malo ? 'revisar' : listo ? pesos(K.subs[x.k] || 0) : 'pendiente'}</span></button>`;
+      }).join('')}`;
+  };
+  return `<aside class="g-lado" id="g-lado">
+    <section class="g-total"><span>Total caja menor</span><b>${pesos(K.menor)}</b><span class="pequeno">Incluye lo que llevas escrito</span></section>
+    <section class="g-lista">${grupo('b', 'Billetes')}${grupo('m', 'Monedas')}
+      <p class="pequeno tenue" style="margin:10px 0 4px">Toca cualquier denominación para volver a ella y corregirla.</p></section>
+    <button type="button" class="btn sec" data-accion="gVolver">Volver al cuadre</button>
+  </aside>`;
+}
+
+VISTAS.conteoGrande = () => {
+  if (!esPC()) return soloPC();
+  if (!S.caja) S.caja = nuevaCaja();
+  const C = S.caja, K = cuentasCaja(C);
+  const i = idxGrande(C);
+  const x = DENOMS[i], ant = DENOMS[i - 1], sig = DENOMS[i + 1];
+  const modo = C.gModo === 'valor' ? 'valor' : 'cantidad';
+  const c = C.conteo[x.k] || {};
+  let valorIn;
+  if (modo === 'cantidad') valorIn = c.cantidad !== undefined && c.cantidad !== '' ? c.cantidad : (isFinite(c.valor) && c.valor !== '' && c.valor % x.d === 0 ? c.valor / x.d : '');
+  else valorIn = c.valor !== undefined && c.valor !== '' ? enInput(c.valor) : (c.cantidad !== undefined && c.cantidad !== '' && isFinite(c.cantidad) ? enInput(c.cantidad * x.d) : '');
+  const tipoTxt = C.tipo === 'Cierre' ? 'Cierre del ' + fechaCortaISO(C.fecha) : 'Corte de las ' + (C.hora || '—');
+  return {
+    completo: true,
+    clase: 'grande-cuerpo',
+    barra: barra('Conteo de caja menor · uno por uno', (x.t === 'b' ? 'Billete' : 'Moneda') + ' ' + (i + 1) + ' de ' + DENOMS.length + ' · ' + tipoTxt, { clase: 'verde', accionVolver: 'gVolver' }),
+    cuerpo: `<div class="g-prog" aria-hidden="true"><div style="width:${((i + 1) / DENOMS.length) * 100}%"></div></div>
+    <div class="g-wrap">
+      <main class="g-main ${K.malos[x.k] ? 'con-error' : ''}" id="g-main">
+        <div class="seg g-seg" role="group" aria-label="Cómo contar">
+          <button type="button" class="${modo === 'cantidad' ? 'sel' : ''}" aria-pressed="${modo === 'cantidad'}" data-accion="gModo" data-v="cantidad">Por cantidad</button>
+          <button type="button" class="${modo === 'valor' ? 'sel' : ''}" aria-pressed="${modo === 'valor'}" data-accion="gModo" data-v="valor">Por valor total</button>
+        </div>
+        <span class="g-pide">${modo === 'cantidad' ? 'Cuenta los ' + plural(x) + ' de' : 'Escribe el valor total de los ' + plural(x) + ' de'}</span>
+        <span class="g-den">${h(x.n)}</span>
+        ${modo === 'cantidad'
+          ? `<div class="g-fila">
+              <button type="button" class="g-menos" data-accion="gMenos" aria-label="Restar uno">–</button>
+              <input id="g-in" class="g-cant" type="text" inputmode="numeric" autocomplete="off" data-den="${x.k}" data-parte="cantidad" data-grande value="${h(valorIn)}" aria-label="Cantidad de ${plural(x)} de ${h(x.n)}">
+              <button type="button" class="g-mas" data-accion="gMas" aria-label="Sumar uno">+</button>
+            </div>`
+          : `<label for="g-in" class="g-lbl">Valor total</label>
+            <div class="g-valor"><span aria-hidden="true">$</span>
+              <input id="g-in" type="text" inputmode="numeric" autocomplete="off" data-den="${x.k}" data-parte="valor" data-grande value="${h(valorIn)}"></div>`}
+        <div id="g-eq">${htmlEquivale(C, K, x, modo)}</div>
+        ${modo === 'valor' ? `<span class="g-ayuda">Si el valor no es múltiplo de ${h(x.n)}, la casilla se pone roja y no deja seguir.</span>` : ''}
+        <div class="g-nav">
+          <button type="button" class="btn sec" data-accion="gAnterior" ${ant ? '' : 'disabled'}>‹ ${ant ? h(ant.n) : 'Anterior'}</button>
+          <button type="button" class="btn verde" data-accion="gSiguiente">${sig ? 'Siguiente: ' + h(sig.n) + ' ›' : 'Terminar y volver al cuadre'}</button>
+        </div>
+        <span class="g-ayuda">Enter = siguiente${modo === 'cantidad' ? ' · Teclas + y − suman o restan uno' : ''} · Si no hay ${plural(x)} de esta denominación, deja ${modo === 'cantidad' ? '0' : '$ 0'} y pasa.</span>
+      </main>
+      ${htmlLadoGrande(C, K, i)}
+    </div>`,
+  };
+};
+
+function enfocarGrande() {
+  setTimeout(() => { const el = document.getElementById('g-in'); if (el) { el.focus(); el.select(); } }, 0);
+}
+
+function refrescarGrande() {
+  if (vista() !== 'conteoGrande' || !S.caja) return;
+  const C = S.caja, K = cuentasCaja(C), i = idxGrande(C), x = DENOMS[i];
+  const eq = document.getElementById('g-eq');
+  if (eq) eq.innerHTML = htmlEquivale(C, K, x, C.gModo === 'valor' ? 'valor' : 'cantidad');
+  const main = document.getElementById('g-main');
+  if (main) main.classList.toggle('con-error', !!K.malos[x.k]);
+  const lado = document.getElementById('g-lado');
+  if (lado) { const t = document.createElement('template'); t.innerHTML = htmlLadoGrande(C, K, i).trim(); lado.replaceWith(t.content.firstElementChild); }
+}
+
+/** Marca la denominación actual como revisada y pasa a otra. */
+function moverGrande(nuevo) {
+  const C = S.caja;
+  const i = idxGrande(C);
+  C.gVistos = C.gVistos || {};
+  C.gVistos[DENOMS[i].k] = true;
+  C.gIdx = nuevo;
+  guardarCaja(); render(); enfocarGrande();
+}
 
 function refrescarHist() { if (vista() === 'cajaHist') render(); }
 
@@ -560,7 +809,10 @@ Object.assign(ACCIONES, {
       aviso(txt);
       S.cajaHistFiltro = 'todos';
       S.cajaHistAbierta = r.fecha + r.tipo + r.hora;
+      if (S.cajaMovsHist) delete S.cajaMovsHist[S.cajaHistAbierta]; // si se reemplazó, traer los nuevos
       irRaiz(['inicio', 'cajaHist']);
+      const abierto = (S.cajaHist || []).find((y) => claveHist(y) === S.cajaHistAbierta);
+      if (abierto) cargarMovsHist(abierto, true);
     } catch (e) {
       C.guardando = false;
       if (e.codigo === 'YA_EXISTE') C.confirmar = { tipo: 'reemplazar', mensaje: e.message };
@@ -574,13 +826,73 @@ Object.assign(ACCIONES, {
   },
 
   histFiltro(d) { S.cajaHistFiltro = d.v; render(); },
-  histFila(d) { S.cajaHistAbierta = S.cajaHistAbierta === d.k ? '' : d.k; render(); },
+
+  conteoGrande() {
+    const C = S.caja;
+    const primero = DENOMS.findIndex((x) => !tieneDato(C.conteo[x.k]) && !(C.gVistos || {})[x.k]);
+    C.gIdx = primero >= 0 ? primero : 0;
+    C.gModo = C.gModo || 'cantidad';
+    guardarCaja(); ir('conteoGrande'); enfocarGrande();
+  },
+  gVolver() {
+    if (S.pila[S.pila.length - 2] === 'caja') atras(); else irRaiz(['inicio', 'caja']);
+    cargarSiigo(false);
+  },
+  gModo(d) { S.caja.gModo = d.v === 'valor' ? 'valor' : 'cantidad'; guardarCaja(); render(); enfocarGrande(); },
+  gIr(d) { moverGrande(Number(d.i)); },
+  gAnterior() { const i = idxGrande(S.caja); if (i > 0) moverGrande(i - 1); },
+  gSiguiente() {
+    const C = S.caja, K = cuentasCaja(C), i = idxGrande(C), x = DENOMS[i];
+    if (K.malos[x.k]) { aviso(K.malos[x.k] + '. Corrígelo para seguir.', true); enfocarGrande(); return; }
+    if (i < DENOMS.length - 1) { moverGrande(i + 1); return; }
+    C.gVistos = C.gVistos || {}; C.gVistos[x.k] = true;
+    guardarCaja(); ACCIONES.gVolver();
+    aviso('Caja menor contada: ' + pesos(K.menor) + '.');
+  },
+  gMas() { cambiarCantidadGrande(1); },
+  gMenos() { cambiarCantidadGrande(-1); },
+  histFila(d) {
+    S.cajaHistAbierta = S.cajaHistAbierta === d.k ? '' : d.k;
+    render();
+    const x = (S.cajaHist || []).find((y) => claveHist(y) === S.cajaHistAbierta);
+    if (x) cargarMovsHist(x);
+  },
+  histMovs() { S.cajaHistMovsAbierto = S.cajaHistMovsAbierto === false; refrescarMovsHist(); },
+  histMovsReintentar(d) { const x = (S.cajaHist || []).find((y) => claveHist(y) === d.k); if (x) cargarMovsHist(x, true); },
 });
+
+function cambiarCantidadGrande(paso) {
+  const C = S.caja, x = DENOMS[idxGrande(C)];
+  const c = C.conteo[x.k] = C.conteo[x.k] || {};
+  const actual = isFinite(c.cantidad) && c.cantidad !== '' && c.cantidad !== undefined ? Number(c.cantidad)
+    : isFinite(c.valor) && c.valor !== '' && c.valor !== undefined ? Math.floor(c.valor / x.d) : 0;
+  c.cantidad = Math.max(0, actual + paso);
+  delete c.valor;
+  const el = document.getElementById('g-in');
+  if (el) el.value = c.cantidad;
+  guardarCaja(); refrescarGrande();
+}
 
 /* --------------------------------------------------------- Casillas */
 
 appEl.addEventListener('input', (e) => {
   const el = e.target;
+  if (S.caja && vista() === 'conteoGrande' && el.dataset.grande !== undefined) {
+    // En pantalla grande se usa una sola forma por denominación: cantidad o valor.
+    const c = S.caja.conteo[el.dataset.den] = S.caja.conteo[el.dataset.den] || {};
+    if (el.dataset.parte === 'cantidad') {
+      const t = el.value.trim();
+      c.cantidad = t === '' ? '' : /^\d+$/.test(t) ? Number(t) : NaN;
+      delete c.valor;
+    } else {
+      c.valor = leerPesos(el.value);
+      delete c.cantidad;
+      // Puntos de miles mientras se escribe (solo si se escribe al final).
+      if (el.selectionStart === el.value.length && c.valor !== '' && isFinite(c.valor) && !/,/.test(el.value)) el.value = enInput(c.valor);
+    }
+    guardarCaja(); refrescarGrande();
+    return;
+  }
   if (!S.caja || vista() !== 'caja') return;
   const C = S.caja;
   if (el.dataset.den) {
@@ -620,6 +932,12 @@ appEl.addEventListener('change', (e) => {
 
 // Enter pasa a la siguiente casilla, como en la hoja de cálculo.
 appEl.addEventListener('keydown', (e) => {
+  if (e.target.matches('input[data-grande]')) {
+    if (e.key === 'Enter') { e.preventDefault(); ACCIONES.gSiguiente(); }
+    else if (e.target.dataset.parte === 'cantidad' && (e.key === '+' || e.key === 'ArrowUp')) { e.preventDefault(); cambiarCantidadGrande(1); }
+    else if (e.target.dataset.parte === 'cantidad' && (e.key === '-' || e.key === 'ArrowDown')) { e.preventDefault(); cambiarCantidadGrande(-1); }
+    return;
+  }
   if (e.key !== 'Enter' || !e.target.matches('input[data-nav]')) return;
   e.preventDefault();
   const todas = Array.from(appEl.querySelectorAll('input[data-nav]'));
