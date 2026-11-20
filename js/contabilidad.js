@@ -61,8 +61,8 @@ function nuevaCaja(fecha) {
 }
 const horaCaja = (C) => (C.tipo === 'Parcial' ? C.hora : '');
 const claveCaja = (C) => C.fecha + '|' + horaCaja(C);
-/** Datos de Siigo solo si son de la fecha y hora elegidas. */
-const siigoDe = (C) => (C.siigo && C.siigo._clave === claveCaja(C) ? C.siigo : null);
+/** Datos de Siigo solo si son de la fecha y hora elegidas (al editar: los del cuadre guardado, o los actualizados). */
+const siigoDe = (C) => (C.edicion ? siigoEdicion(C) : C.siigo && C.siigo._clave === claveCaja(C) ? C.siigo : null);
 
 let guardarCajaT = null;
 function guardarCaja() {
@@ -124,6 +124,7 @@ let cargaCaja = 0;
 async function cargarSiigo(forzar) {
   const C = S.caja;
   if (!C) return;
+  if (C.edicion) { if (forzar) actualizarSiigoEdicion(); return; }
   if (C.tipo === 'Parcial' && !C.hora) { C.error = ''; refrescarCaja(); return; }
   if (!navigator.onLine) {
     C.error = siigoDe(C) ? 'Sin señal: se muestran los últimos datos de Siigo.' : 'Sin señal: se necesita conexión para consultar Siigo.';
@@ -202,7 +203,10 @@ function htmlBase(C, K) {
     </div>`;
   }
   let valor, nota;
-  if (K.manual) { valor = pesos(K.base); nota = 'Escrita a mano'; }
+  if (C.edicion && !K.manual) {
+    valor = K.base !== null ? pesos(K.base) : '—';
+    nota = C.edicion.usarBaseNueva ? 'nueva · cierre del ' + fechaCortaISO((cierreAnterior(C) || {}).fecha) : 'la guardada con el cuadre';
+  } else if (K.manual) { valor = pesos(K.base); nota = 'Escrita a mano'; }
   else if (sg && sg.base !== null && sg.base !== undefined) { valor = pesos(sg.base); nota = 'Cierre guardado del ' + fechaCortaISO(sg.baseFecha); }
   else if (sg) { valor = '—'; nota = 'No hay un cierre guardado antes de esta fecha: escríbela'; }
   else { valor = '…'; nota = C.cargando ? 'Consultando…' : 'Sin datos todavía'; }
@@ -247,15 +251,17 @@ function htmlTablaConteo(C, K, tipo) {
     const malo = K.malos[x.k];
     const con = !malo && K.subs[x.k] > 0;
     const v = casillasConteo(c, x);
-    return `<tr class="${malo ? 'error' : con ? 'con' : ''}" data-fila="${x.k}"${malo ? ` title="${h(malo)}"` : ''}>
+    const a = C.edicion ? antesDen(C, K, x) : null;
+    return `<tr class="${malo ? 'error' : con ? 'con' : ''}${a && a.cambia ? ' editado' : ''}" data-fila="${x.k}"${malo ? ` title="${h(malo)}"` : ''}>
       <th scope="row"><span class="den-c">${ICONO_DEN[tipo]}${h(x.n)}</span></th>
       <td><input class="cant-in${v.calcC ? ' calc' : ''}" type="text" inputmode="numeric" placeholder="0" data-den="${x.k}" data-parte="cantidad" data-nav value="${h(v.cant)}" aria-label="Cantidad de ${h(x.n)}" autocomplete="off"></td>
       <td><span class="con-signo"><span aria-hidden="true">$</span><input class="pesos-in${v.calcV ? ' calc' : ''}" type="text" inputmode="decimal" placeholder="0" data-den="${x.k}" data-parte="valor" data-nav value="${h(v.valor)}" aria-label="Valor de ${h(x.n)}" autocomplete="off"></span></td>
+      ${a ? `<td class="antes">${a.cambia ? h(a.texto) : ''}</td>` : ''}
     </tr>`;
   }).join('');
   return `<div class="tabla-conteo">
     <table class="conteo">
-    <thead><tr><th>${tipo === 'b' ? 'Billetes' : 'Monedas'}</th><th class="num">Cantidad</th><th class="num">Valor</th></tr></thead>
+    <thead><tr><th>${tipo === 'b' ? 'Billetes' : 'Monedas'}</th><th class="num">Cantidad</th><th class="num">Valor</th>${C.edicion ? '<th>Antes</th>' : ''}</tr></thead>
     <tbody>${filas}</tbody></table>
     <div class="pie-conteo" id="pie-${tipo}">${htmlPieConteo(K, tipo)}</div></div>`;
 }
@@ -267,6 +273,12 @@ function cierreAnterior(C) {
 
 /** "Cierre del 18/11: $ 6.000.000" debajo de cajón, caja fuerte y monedas. */
 function htmlRefAnterior(C, k) {
+  if (C.edicion) {
+    const antes = Number(C.edicion.orig[k] || 0);
+    const hoy = C[k] === '' || C[k] === undefined || !isFinite(Number(C[k])) ? 0 : Number(C[k]);
+    if (Math.abs(hoy - antes) < 0.005) return `<span>Guardado: <b>${pesos(antes)}</b></span><b class="rc-cambio">sin cambio</b>`;
+    return `<span>Antes: <b>${pesos(antes)}</b></span><b class="rc-cambio ed">${conSigno(r2(hoy - antes))}</b>`;
+  }
   const a = cierreAnterior(C);
   if (!a) return S.cajaHistCargando ? 'Buscando el cierre anterior…' : 'Sin cierre anterior guardado';
   const v = a[k];
@@ -284,7 +296,6 @@ function htmlRefAnterior(C, k) {
 function htmlUltimo(C) {
   const lista = S.cajaHist;
   if (!lista) return `<div class="ultimo-cuadre" id="caja-ultimo">${IC.reloj ? IC.reloj(18) : ''}<span>${S.cajaHistCargando ? 'Buscando el último cuadre guardado…' : 'No se pudo ver el último cuadre guardado.'}</span></div>`;
-  const ddmm = (v) => { const d = aFecha(v); return d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') : ''; };
   const quien = (x) => (x.guardadoEl ? ' · guardado el ' + ddmm(x.guardadoEl) + ' a las ' + hora(x.guardadoEl) : '') + (x.guardadoPor ? ' por ' + x.guardadoPor : '');
   const nombre = (x) => (x.tipo === 'Parcial' ? 'Corte de las ' + x.hora : 'Cierre') + ' del ' + fechaLarga(x.fecha).toLowerCase().replace(/\/\d{4}$/, '');
   const dia = fechaCortaISO(C.fecha);
@@ -328,6 +339,7 @@ function htmlResumenMenor(C, K) {
 }
 
 function htmlMovs(C, K) {
+  if (C.edicion) return htmlMovsEd(C, K);
   const sg = K.sg;
   const abierto = C.movsAbierto;
   const resumen = sg
@@ -383,6 +395,7 @@ function htmlResultado(C, K) {
 }
 
 function htmlGuardar(C, K) {
+  if (C.edicion) return htmlGuardarEd(C, K);
   const sg = K.sg;
   const cuando = sg && sg.consultado ? hora(sg.consultado) : '';
   const etiqueta = C.tipo === 'Cierre' ? 'Guardar cierre del ' + fechaCortaISO(C.fecha) : 'Guardar corte de las ' + (C.hora || '—');
@@ -421,6 +434,8 @@ VISTAS.caja = () => {
       <div class="conta-main">
         <div class="conta-col">
           <section class="panel fila-sup">
+            ${C.edicion ? `<div class="campo-pc"><span class="lbl">Cuadre que se edita</span>
+              <b class="ed-cual">${h(nombreCuadre(C))}</b><span class="pastilla-ed">Edición ${C.edicion.n}</span></div>` : `
             <div class="campo-pc"><label for="cfecha">Fecha del cuadre</label>
               <input id="cfecha" type="date" max="${hoyISO()}" value="${h(C.fecha)}" data-campo-caja="fecha">
               ${C.fecha === hoyISO() ? '<span class="pastilla-hoy">Hoy</span>' : '<button type="button" class="btn-borde chico-hoy" data-accion="cajaHoy">Volver a hoy</button>'}</div>
@@ -432,10 +447,10 @@ VISTAS.caja = () => {
             <div class="campo-pc"><label for="chora">Hora de corte</label>
               <select id="chora" data-campo-caja="hora" ${C.tipo === 'Cierre' ? 'disabled' : ''}>
                 ${C.tipo === 'Cierre' ? '<option>Día completo</option>' : `<option value="">Elige la hora</option>${HORAS.concat(C.hora && HORAS.indexOf(C.hora) < 0 ? [C.hora] : []).map((x) => `<option ${x === C.hora ? 'selected' : ''}>${x}</option>`).join('')}`}
-              </select></div>
+              </select></div>`}
             ${htmlBase(C, K)}
           </section>
-          ${htmlUltimo(C)}
+          ${C.edicion ? htmlAvisoEdicion(C) : htmlUltimo(C)}
 
           <section class="panel">
             ${htmlResumenMenor(C, K)}
@@ -460,8 +475,8 @@ VISTAS.caja = () => {
                 <div class="rc-pie" id="ref-${k}">${htmlRefAnterior(C, k)}</div>
               </div>`).join('')}
             </div>
-            <div class="entre"><button type="button" class="enlace" data-accion="cajaNuevo">Borrar el conteo y empezar de nuevo</button>
-              <span class="pequeno tenue">Lo escrito se guarda en este equipo hasta que guardes el cuadre.</span></div>
+            <div class="entre">${C.edicion ? '<button type="button" class="enlace" data-accion="cajaEdDeshacer">Deshacer los cambios (volver a lo guardado)</button>' : '<button type="button" class="enlace" data-accion="cajaNuevo">Borrar el conteo y empezar de nuevo</button>'}
+              <span class="pequeno tenue">${C.edicion ? 'Las filas en amarillo son las que cambian en esta edición.' : 'Lo escrito se guarda en este equipo hasta que guardes el cuadre.'}</span></div>
           </section>
 
           ${htmlMovs(C, K)}
@@ -469,6 +484,9 @@ VISTAS.caja = () => {
 
         <aside class="conta-lado">
           ${htmlResultado(C, K)}
+          ${C.edicion ? htmlCambiosEd(C, K) : ''}
+          ${C.edicion ? `<div class="campo-pc"><label for="cmotivo">Motivo del cambio <span class="tenue" style="font-weight:400">(opcional)</span></label>
+            <textarea id="cmotivo" data-campo-caja="motivo" placeholder="Ej.: se contaron mal los billetes de $ 20.000">${h(C.edicion.motivo || '')}</textarea></div>` : ''}
           <div class="campo-pc"><label for="cobs">Observación (opcional)</label>
             <textarea id="cobs" data-campo-caja="obs" placeholder="Por ejemplo, quién contó o qué explica una diferencia">${h(C.obs)}</textarea></div>
           ${htmlGuardar(C, K)}
@@ -488,12 +506,13 @@ function refrescarCaja() {
     'caja-movs': htmlMovs(C, K),
     'caja-base': htmlBase(C, K),
     'caja-resumen': htmlResumenMenor(C, K),
-    'caja-ultimo': htmlUltimo(C),
+    'caja-ultimo': C.edicion ? htmlAvisoEdicion(C) : htmlUltimo(C),
+    'caja-cambios': C.edicion ? htmlCambiosEd(C, K) : '',
   };
   Object.keys(nuevos).forEach((id) => {
     const viejo = document.getElementById(id);
     const activo = document.activeElement;
-    if (!viejo || (activo && viejo.contains(activo) && /INPUT|TEXTAREA|SELECT/.test(activo.tagName))) return;
+    if (!viejo || !nuevos[id] || (activo && viejo.contains(activo) && /INPUT|TEXTAREA|SELECT/.test(activo.tagName))) return;
     const enfocado = activo && viejo.contains(activo) && activo.dataset.accion; // devolver el foco al botón tocado
     const t = document.createElement('template');
     t.innerHTML = nuevos[id].trim();
@@ -517,6 +536,12 @@ function refrescarCaja() {
     if (malo) tr.title = malo; else tr.removeAttribute('title');
     // La casilla que no se está escribiendo muestra el cálculo en gris.
     const v = casillasConteo(C.conteo[x.k] || {}, x);
+    if (C.edicion) {
+      const a = antesDen(C, K, x);
+      tr.classList.toggle('editado', a.cambia);
+      const td = tr.querySelector('td.antes');
+      if (td) td.textContent = a.cambia ? a.texto : '';
+    }
     [['cantidad', v.cant, v.calcC], ['valor', v.valor, v.calcV]].forEach(([parte, val, calc]) => {
       const inp = tr.querySelector(`input[data-parte="${parte}"]`);
       if (!inp || inp === document.activeElement) return;
@@ -524,6 +549,290 @@ function refrescarCaja() {
     });
   });
   ['b', 'm'].forEach((t) => { const pie = document.getElementById('pie-' + t); if (pie) pie.innerHTML = htmlPieConteo(K, t); });
+}
+
+/* ------------------------------------------------ Editar un cuadre guardado */
+
+/** "Cierre del mié 18/11" o "Corte de las 12:00 del mié 18/11". */
+function nombreCuadre(x) {
+  const dia = fechaLarga(x.fecha).toLowerCase().replace(/\/\d{4}$/, '');
+  return (x.tipo === 'Parcial' ? 'Corte de las ' + x.hora : 'Cierre') + ' del ' + dia;
+}
+
+/** Base nueva posible: total del último cierre antes del día (puede haber cambiado si ese cierre se editó). */
+function baseNuevaEd(C) { const a = cierreAnterior(C); return a ? a.contado : null; }
+
+/** Siigo del cuadre que se edita: lo guardado con él, o lo que trajo "Actualizar movimientos de Siigo". */
+function siigoEdicion(C) {
+  const E = C.edicion, o = E.orig;
+  const nueva = E.usarBaseNueva ? baseNuevaEd(C) : null;
+  const base = nueva !== null ? nueva : o.base;
+  const baseFecha = nueva !== null ? (cierreAnterior(C) || {}).fecha : '';
+  if (E.usarSiigoNuevo && E.siigoNuevo) return Object.assign({}, E.siigoNuevo, { base, baseFecha });
+  return { movimientos: E.movs || [], entradas: o.entradas || 0, salidas: o.salidas || 0, neto: o.neto || 0,
+    base, baseFecha, hora: o.tipo === 'Parcial' ? o.hora : '', guardado: true };
+}
+
+/** Prepara el cuadre para editarlo con los datos guardados. Lo que se estaba contando queda aparte. */
+function cajaDesdeHist(x, borrador) {
+  const C = nuevaCaja(x.fecha);
+  C.tipo = x.tipo; C.hora = x.tipo === 'Parcial' ? x.hora : '';
+  const den = leerConteoTexto(x.conteo);
+  const origConteo = {};
+  den.billetes.concat(den.monedas).forEach((d) => {
+    origConteo[d.k] = { cant: d.cant, val: d.val };
+    C.conteo[d.k] = d.porCant ? { cantidad: d.cant } : { valor: d.val };
+  });
+  ['cajon', 'cajaFuerte', 'monedas'].forEach((k) => { C[k] = x[k] === null || x[k] === undefined ? '' : x[k]; });
+  C.obs = x.observacion || '';
+  C.baseManual = x.baseManual ? x.base : '';
+  C.tablaAbierta = true;
+  C.movsAbierto = true;
+  C.edicion = { orig: x, origConteo, n: (x.ediciones || 0) + 1, movs: null, movsEstado: 'cargando', siigoNuevo: null,
+    usarSiigoNuevo: false, usarBaseNueva: false, motivo: '', consultando: false, borrador: borrador || null };
+  return C;
+}
+
+/** Cómo estaba una denominación en el cuadre guardado, y si cambió. */
+function antesDen(C, K, x) {
+  const o = C.edicion.origConteo[x.k];
+  const antes = o ? o.val : 0;
+  const ahora = K.malos[x.k] ? NaN : K.subs[x.k] || 0;
+  return { cambia: !(ahora === antes), texto: o ? o.cant + ' · ' + pesos(o.val) : 'No estaba', antes, ahora };
+}
+
+/** Compara los movimientos guardados con los que trae Siigo ahora. */
+function compararMovs(viejos, nuevos) {
+  const clave = (m) => m.origen + ' ' + m.comprobante;
+  const antes = {};
+  (viejos || []).forEach((m) => { antes[clave(m)] = m; });
+  const vistos = {};
+  const filas = (nuevos || []).map((m) => {
+    const a = antes[clave(m)];
+    vistos[clave(m)] = true;
+    const estado = !a ? 'nuevo' : Math.abs(a.entrada - m.entrada) >= 0.005 || Math.abs(a.salida - m.salida) >= 0.005 ? 'cambio' : '';
+    return Object.assign({}, m, { estado, antes: a });
+  });
+  (viejos || []).forEach((m) => { if (!vistos[clave(m)]) filas.push(Object.assign({}, m, { estado: 'quitado' })); });
+  return filas;
+}
+
+/** Lista de cambios de esta edición (para mostrar y para saber si hay algo que guardar). */
+function cambiosEdicion(C, K) {
+  const E = C.edicion, o = E.orig;
+  const res = [];
+  DENOMS.forEach((x) => {
+    const a = antesDen(C, K, x);
+    if (!a.cambia || isNaN(a.ahora)) return;
+    const ahora = a.ahora ? (a.ahora / x.d) + ' · ' + pesos(a.ahora) : 'ya no hay';
+    res.push({ dato: (x.t === 'b' ? 'Billetes de ' : 'Monedas de ') + x.n, antes: o && E.origConteo[x.k] ? a.texto : 'no estaba', despues: ahora, cambio: conSigno(r2(a.ahora - a.antes)) });
+  });
+  [['cajon', 'Cajón'], ['cajaFuerte', 'Caja fuerte'], ['monedas', 'Monedas (reserva)']].forEach(([k, t]) => {
+    const antes = Number(o[k] || 0), ahora = C[k] === '' || !isFinite(Number(C[k])) ? 0 : Number(C[k]);
+    if (Math.abs(antes - ahora) >= 0.005) res.push({ dato: t, antes: pesos(antes), despues: pesos(ahora), cambio: conSigno(r2(ahora - antes)) });
+  });
+  if (K.base !== null && Math.abs((o.base || 0) - K.base) >= 0.005) res.push({ dato: 'Base al abrir', antes: pesos(o.base), despues: pesos(K.base), cambio: conSigno(r2(K.base - (o.base || 0))) });
+  if (E.usarSiigoNuevo && E.siigoNuevo) {
+    compararMovs(E.movs, E.siigoNuevo.movimientos).filter((m) => m.estado).forEach((m) => {
+      const v = (x) => (x.entrada ? 'entrada ' + pesos(x.entrada) : 'salida ' + pesos(x.salida));
+      res.push({ dato: m.comprobante + (m.nombre ? ' · ' + m.nombre : ''), antes: m.estado === 'nuevo' ? '—' : v(m.antes || m),
+        despues: m.estado === 'quitado' ? 'ya no está' : v(m), cambio: m.estado === 'nuevo' ? 'nuevo en Siigo' : m.estado === 'quitado' ? 'ya no está' : 'cambió', siigo: true });
+    });
+  }
+  if ((o.observacion || '') !== (C.obs || '')) res.push({ dato: 'Observación', antes: o.observacion || '(vacía)', despues: C.obs || '(vacía)', cambio: 'cambió' });
+  return res;
+}
+
+const textoResultado = (dif) => (dif === null || dif === undefined ? '—' : Math.abs(dif) < 0.005 ? 'Cuadra · $ 0' : (dif > 0 ? 'Sobran ' : 'Faltan ') + pesos(Math.abs(dif)));
+
+const ddmm = (v) => { const d = aFecha(v); return d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') : ''; };
+
+function htmlAvisoEdicion(C) {
+  const E = C.edicion, o = E.orig;
+  const ultima = o.ultimaEdicion ? 'última edición el ' + o.ultimaEdicion
+    : 'guardado' + (o.guardadoEl ? ' el ' + ddmm(o.guardadoEl) + ' a las ' + hora(o.guardadoEl) : '') + (o.guardadoPor ? ' por ' + o.guardadoPor : '');
+  const bn = baseNuevaEd(C);
+  const baseCambio = !o.baseManual && C.baseManual === '' && bn !== null && Math.abs(bn - (o.base || 0)) >= 0.005;
+  return `<div class="aviso-ed" id="caja-ultimo">
+    <div class="fila-ed">${IC.lapiz ? IC.lapiz(20) : IC.alerta(20)}
+      <span class="grow"><b>Editando: ${h(nombreCuadre(o))} · esta será la Edición ${E.n}</b> · ${h(ultima)}.</span>
+      <button type="button" class="btn-borde chico-hoy" data-accion="cajaEdCancelar">Cancelar edición</button></div>
+    ${baseCambio ? `<div class="fila-ed pequeno">${E.usarBaseNueva
+      ? `Usando la base nueva: <b>${pesos(bn)}</b> (el cuadre se guardó con ${pesos(o.base)}). <button type="button" class="enlace" data-accion="cajaEdBase">Volver a la base guardada</button>`
+      : `La base cambió: el cierre del ${fechaCortaISO((cierreAnterior(C) || {}).fecha)} ahora es <b>${pesos(bn)}</b> y el cuadre se guardó con ${pesos(o.base)}. <button type="button" class="enlace" data-accion="cajaEdBase">Usar la nueva base</button>`}</div>` : ''}
+  </div>`;
+}
+
+function htmlCambiosEd(C, K) {
+  const lista = cambiosEdicion(C, K);
+  const o = C.edicion.orig;
+  const antes = textoResultado(o.diferencia), ahora = textoResultado(K.dif);
+  return `<section class="panel cambios-ed" id="caja-cambios">
+    <h3>Cambios de esta edición <span class="tenue">(${lista.length})</span></h3>
+    ${lista.length ? `<ul>${lista.map((c) => `<li><b>${h(c.dato)}:</b> ${h(c.antes)} → <b>${h(c.despues)}</b> <span class="${c.siigo ? 'txt-azul' : 'tenue'}">(${h(c.cambio)})</span></li>`).join('')}</ul>`
+      : '<p class="tenue pequeno">Todavía no hay cambios. Corrige lo que haga falta en las tablas, en el resto de la caja o en los movimientos de Siigo.</p>'}
+    <div class="res-ed ${antes === ahora ? '' : 'cambia'}"><span class="tenue">Resultado</span>
+      ${antes === ahora ? `<b>${h(ahora)}</b> <span class="tenue pequeno">sin cambio</span>` : `<s>${h(antes)}</s> → <b>${h(ahora)}</b>`}</div>
+  </section>`;
+}
+
+function htmlMovsEd(C, K) {
+  const E = C.edicion;
+  const abierto = C.movsAbierto;
+  const nuevo = E.usarSiigoNuevo && E.siigoNuevo;
+  const filas = nuevo ? compararMovs(E.movs, E.siigoNuevo.movimientos) : (E.movs || []).map((m) => Object.assign({}, m, { estado: '' }));
+  const cambios = filas.filter((m) => m.estado).length;
+  const sg = K.sg;
+  const resumen = E.movsEstado === 'cargando' && !nuevo ? 'Cargando los movimientos guardados…'
+    : `${filas.filter((m) => m.estado !== 'quitado').length} movimiento(s) · entradas ${pesos(sg.entradas)} · salidas ${pesos(sg.salidas)}${nuevo ? ' · ' + (cambios ? cambios + ' cambio(s)' : 'sin cambios') : ''}`;
+  let cuerpo = '';
+  if (abierto) {
+    const aviso = nuevo
+      ? `<div class="aviso-siigo ${cambios ? '' : 'igual'}">${cambios ? `<b>Siigo trae ${cambios} cambio(s)</b> que no estaban cuando se guardó el cuadre. Si guardas, el cuadre usará los movimientos actualizados.` : '<b>Siigo no tiene cambios:</b> los movimientos son los mismos que se guardaron.'}
+          <button type="button" class="enlace" data-accion="cajaEdSiigoGuardado">Volver a los guardados</button></div>`
+      : E.movsEstado === 'sinGuardar' ? '<p class="tenue pequeno">Este cuadre no tiene sus movimientos guardados; se usan sus totales. Puedes traerlos con "Actualizar movimientos de Siigo".</p>' : '';
+    const est = (m) => (m.estado === 'nuevo' ? '<span class="pastilla ed">Nuevo</span>' : m.estado === 'cambio' ? '<span class="pastilla ed">Cambió</span>' : m.estado === 'quitado' ? '<span class="pastilla error">Ya no está</span>' : '');
+    cuerpo = aviso + (E.movsEstado === 'error' && !nuevo ? '<p class="error-txt">No se pudieron cargar los movimientos guardados.</p>'
+      : !filas.length ? (E.movsEstado === 'cargando' ? '<p class="tenue">Cargando…</p>' : '<p class="tenue">Sin movimientos de caja.</p>')
+      : `<div class="tabla-caja"><table>
+        <thead><tr>${nuevo ? '<th>Estado</th>' : ''}<th>Comprobante</th><th>Tercero</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
+        <tbody>${filas.map((m) => `<tr class="${m.estado === 'quitado' ? 'quitado' : m.estado ? 'nuevo-ed' : ''}">
+          ${nuevo ? `<td>${est(m)}</td>` : ''}<td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td class="tenue detalle-mov">${h(detalleMov(m))}</td>
+          <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num">${m.salida ? pesos(m.salida) : ''}</td>
+          <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`).join('')}</tbody>
+      </table></div>`);
+  }
+  return `<section class="panel" id="caja-movs">
+    <button type="button" class="plegable" data-accion="cajaMovs" aria-expanded="${abierto}" aria-controls="caja-movs-lista">
+      <span class="flecha ${abierto ? 'abierta' : ''}">${IC.abajo(20)}</span>
+      <span class="grow"><span class="titulo-panel">Movimientos de Siigo · ${nuevo ? 'actualizados ahora' : 'guardados con el cuadre'}</span>
+      <span class="tenue pequeno">${h(resumen)}</span></span>
+      <span class="enlace-txt">${abierto ? 'Ocultar' : 'Mostrar'}</span>
+    </button>
+    ${abierto ? `<div id="caja-movs-lista">${cuerpo}</div>` : ''}
+  </section>`;
+}
+
+function htmlGuardarEd(C, K) {
+  const E = C.edicion;
+  const etiqueta = 'Guardar Edición ' + E.n + ' del ' + (C.tipo === 'Cierre' ? 'cierre del ' + fechaCortaISO(C.fecha) : 'corte de las ' + C.hora);
+  const n = cambiosEdicion(C, K).length;
+  let cuerpo;
+  if (C.confirmar) {
+    cuerpo = `<div class="tarjeta amarilla" style="gap:10px">
+      <b>¿${h(etiqueta)}?</b>
+      <span class="pequeno">${n} cambio(s) · contado ${pesos(K.total)} · ${h(textoResultado(K.dif).toLowerCase())}. Lo guardado antes queda como evidencia.</span>
+      <div class="fila"><button type="button" class="btn chico verde" data-accion="cajaConfirmar" ${C.guardando ? 'disabled' : ''}>${C.guardando ? 'Guardando…' : 'Sí, guardar'}</button>
+      <button type="button" class="btn chico sec" data-accion="cajaCancelar" ${C.guardando ? 'disabled' : ''}>Cancelar</button></div>
+    </div>`;
+  } else {
+    cuerpo = `<button type="button" class="btn verde" data-accion="cajaGuardar" ${E.consultando || !navigator.onLine ? 'disabled' : ''}>${h(etiqueta)}</button>`;
+  }
+  return `<div id="caja-guardar" class="conta-guardar">
+    <button type="button" class="btn sec chico" style="width:100%" data-accion="cajaActualizar" ${E.consultando ? 'disabled' : ''}>
+      <span class="${E.consultando ? 'girando-ic' : ''}">${IC.sync(20)}</span> ${E.consultando ? 'Consultando Siigo…' : 'Actualizar movimientos de Siigo'}</button>
+    <span class="pequeno tenue" style="text-align:center">${E.usarSiigoNuevo && E.siigoNuevo && E.siigoNuevo.consultado ? 'Siigo consultado a las ' + h(hora(E.siigoNuevo.consultado)) : 'Se usan los movimientos guardados con el cuadre'}</span>
+    ${C.error ? `<div class="tarjeta alerta" style="padding:10px 12px"><b class="pequeno">${h(C.error)}</b></div>` : ''}
+    ${cuerpo}
+  </div>`;
+}
+
+async function cargarMovsEdicion() {
+  const C = S.caja;
+  if (!C || !C.edicion) return;
+  const E = C.edicion, o = E.orig;
+  const k = claveHist(o);
+  const cache = (S.cajaMovsHist || {})[k];
+  if (cache && cache.datos) { E.movs = cache.datos.movimientos; E.movsEstado = cache.datos.existe ? 'listo' : 'sinGuardar'; refrescarCaja(); return; }
+  try {
+    const r = await api('movimientosCuadre', { fecha: o.fecha, hora: o.hora, tipo: o.tipo });
+    if (S.caja !== C) return;
+    E.movs = r.movimientos; E.movsEstado = r.existe ? 'listo' : 'sinGuardar';
+  } catch (e) {
+    if (S.caja !== C) return;
+    E.movsEstado = 'error';
+  }
+  guardarCaja(); refrescarCaja();
+}
+
+async function actualizarSiigoEdicion() {
+  const C = S.caja, E = C.edicion;
+  if (E.consultando) return;
+  if (!navigator.onLine) { aviso('Sin señal: se necesita conexión para consultar Siigo.', true); return; }
+  E.consultando = true; C.error = ''; refrescarCaja();
+  try {
+    const r = await api('cuadreCaja', { fecha: C.fecha, hora: horaCaja(C), forzar: true });
+    if (S.caja !== C) return;
+    E.siigoNuevo = r; E.usarSiigoNuevo = true; C.movsAbierto = true;
+    const n = compararMovs(E.movs, r.movimientos).filter((m) => m.estado).length;
+    aviso(n ? 'Siigo trae ' + n + ' cambio(s) en los movimientos.' : 'Siigo no tiene cambios en los movimientos.');
+  } catch (e) {
+    if (e.codigo === 'NO_AUTORIZADO') S.sesionVencida = true;
+    C.error = e.codigo === 'RED' ? 'No se pudo conectar con Siigo. Revisa la señal e intenta de nuevo.' : e.message;
+  } finally {
+    E.consultando = false; C.confirmar = null; guardarCaja(); refrescarCaja();
+  }
+}
+
+/* --------------------------------------------- Evidencia de las ediciones */
+
+function htmlCambiosHist(x) {
+  if (!x.ediciones) return '';
+  const e = (S.cajaCambiosHist || {})[claveHist(x)] || {};
+  const d = e.datos;
+  let cuerpo;
+  if (e.error) cuerpo = `<p class="error-txt">${h(e.error)}</p>`;
+  else if (!d) cuerpo = '<p class="tenue">Cargando los cambios…</p>';
+  else {
+    const fila = (c) => {
+      const color = /^\+|nuevo|corregido/.test(c.cambio) ? 'txt-verde' : /^−|ya no|Faltan/.test(c.cambio) ? 'txt-terracota' : 'tenue';
+      return `<tr><td>${h(c.dato)}</td><td class="num tenue">${h(c.antes)}</td><td class="num"><b>${h(c.despues)}</b></td><td class="num ${color}"><b>${h(c.cambio)}</b></td></tr>`;
+    };
+    const eds = d.ediciones.map((ed) => `<div class="ed-paso">
+        <span class="ed-num">${ed.n}</span>
+        <div class="ed-cuerpo">
+          <div class="ed-meta"><b>Edición ${ed.n}</b>
+            <span><span class="tenue">Cuándo</span> <b>${ed.cuando ? h(fechaCorta(ed.cuando) + ' · ' + hora(ed.cuando)) : '—'}</b></span>
+            <span><span class="tenue">Quién</span> <b>${h(ed.quien || '—')}</b></span>
+            <span><span class="tenue">Motivo</span> ${ed.motivo ? `<b>${h(ed.motivo)}</b>` : '<span class="tenue">Sin motivo escrito</span>'}</span></div>
+          <div class="h-tabla"><table><thead><tr><th>Dato</th><th class="num">Antes</th><th class="num">Después</th><th class="num">Cambio</th></tr></thead>
+            <tbody>${ed.cambios.map(fila).join('')}</tbody></table></div>
+        </div></div>`).join('');
+    const o = d.original;
+    const orig = o ? `<div class="ed-paso original"><span class="ed-num"></span>
+        <div class="ed-cuerpo"><div class="ed-meta"><b>Original</b>
+          <span><span class="tenue">Guardado</span> <b>${o.guardadoEl ? h(fechaCorta(o.guardadoEl) + ' · ' + hora(o.guardadoEl)) : '—'}</b></span>
+          <span><span class="tenue">Quién</span> <b>${h(o.guardadoPor || '—')}</b></span>
+          <span><span class="tenue">Efectivo contado</span> <b>${pesos(o.contado)}</b> · <b>${h(textoResultado(o.diferencia))}</b></span></div>
+          ${o.conteo ? `<details><summary>Ver el conteo original completo</summary>
+            <p class="pequeno">Caja menor ${pesos(o.cajaMenor)} · Cajón ${pesos(o.cajon)} · Caja fuerte ${pesos(o.cajaFuerte)} · Monedas ${pesos(o.monedas)} · Base ${pesos(o.base)} · Entradas Siigo ${pesos(o.entradas)} · Salidas Siigo ${pesos(o.salidas)}</p>
+            <p class="pequeno">${leerConteoTexto(o.conteo).billetes.concat(leerConteoTexto(o.conteo).monedas).map((y) => `${y.k === '1000b' ? '$ 1.000 billete' : pesos(y.den)} × ${y.cant} = ${pesos(y.val)}`).join(' · ')}</p></details>` : ''}
+        </div></div>` : '';
+    cuerpo = eds + orig;
+  }
+  return `<section class="h-bloque cambios-hist" id="h-cambios">
+    <h3>5 · Cambios hechos a este cuadre <span class="pastilla-ed">${x.ediciones} ${x.ediciones === 1 ? 'edición' : 'ediciones'}</span></h3>
+    ${cuerpo}
+  </section>`;
+}
+
+async function cargarCambiosHist(x, forzar) {
+  if (!x.ediciones) return;
+  S.cajaCambiosHist = S.cajaCambiosHist || {};
+  const k = claveHist(x);
+  const e = S.cajaCambiosHist[k];
+  if (e && (e.datos || e.cargando) && !forzar) return;
+  S.cajaCambiosHist[k] = { cargando: true };
+  try {
+    const r = await api('cambiosCuadre', { fecha: x.fecha, hora: x.hora, tipo: x.tipo });
+    S.cajaCambiosHist[k] = { datos: r };
+  } catch (err) {
+    S.cajaCambiosHist[k] = { error: err.codigo === 'RED' ? 'Sin conexión: no se pudieron traer los cambios.' : err.message };
+  }
+  if (vista() !== 'cajaHist') return;
+  const viejo = document.getElementById('h-cambios');
+  const y = (S.cajaHist || []).find((z) => claveHist(z) === S.cajaHistAbierta);
+  if (viejo && y && claveHist(y) === k) { const t = document.createElement('template'); t.innerHTML = htmlCambiosHist(y).trim(); viejo.replaceWith(t.content.firstElementChild); }
 }
 
 /* --------------------------------------------------- Historial de cuadres */
@@ -537,7 +846,8 @@ function leerConteoTexto(texto) {
     const den = Number(m[1]), val = Number(m[4]);
     const cant = m[3] ? Number(m[3]) : den ? Math.round(val / den) : 0;
     const esBillete = den >= 2000 || !!m[2];
-    (esBillete ? billetes : monedas).push({ den, cant, val });
+    const k = den === 1000 && m[2] ? '1000b' : String(den);
+    (esBillete ? billetes : monedas).push({ den, cant, val, k, porCant: !!m[3] });
   });
   const orden = (a, b) => b.den - a.den;
   return { billetes: billetes.sort(orden), monedas: monedas.sort(orden) };
@@ -606,6 +916,7 @@ function htmlDetalleHist(x, lista) {
       </section>
     </div>
     ${htmlMovsHist(x)}
+    ${htmlCambiosHist(x)}
     ${quien}
   </div>`;
 }
@@ -695,13 +1006,17 @@ VISTAS.cajaHist = () => {
     const abierta = S.cajaHistAbierta === k;
     const tipo = x.neto === null ? 'Base inicial (escrita a mano)' : x.tipo === 'Parcial' ? 'Corte parcial · ' + x.hora : 'Cierre del día' + (x.guardadoEl ? ' · ' + hora(x.guardadoEl) : '');
     return `<article class="h-tarjeta ${abierta ? 'abierta' : ''}">
+      <div class="h-cab-fila">
       <button type="button" class="h-cabeza" data-accion="histFila" data-k="${h(k)}" aria-expanded="${abierta}">
         <span class="h-fecha"><b>${h(fechaLarga(x.fecha))}</b><span>${h(tipo)}</span></span>
         <span class="h-contado"><span>Efectivo contado</span><b>${pesos(x.contado)}</b></span>
         ${estado(x)}
+        ${x.ediciones ? `<span class="h-editado">Editado ${x.ediciones} ${x.ediciones === 1 ? 'vez' : 'veces'}</span>` : ''}
         <span class="grow"></span>
         <span class="h-ver">${abierta ? 'Ocultar detalle' : 'Ver detalle'} <span class="${abierta ? 'gira' : ''}" style="display:inline-flex">${IC.abajo(20)}</span></span>
       </button>
+      ${x.neto !== null ? `<button type="button" class="h-editar" data-accion="histEditar" data-k="${h(k)}" aria-label="Editar ${h(nombreCuadre(x))}">${IC.lapiz ? IC.lapiz(18) : ''}Editar</button>` : ''}
+      </div>
       ${abierta ? htmlDetalleHist(x, lista) : ''}
     </article>`;
   }).join('');
@@ -851,8 +1166,8 @@ Object.assign(ACCIONES, {
     if (!S.caja) S.caja = nuevaCaja();
     const C = S.caja;
     C.confirmar = null; C.guardando = false;
-    // Al entrar al cuadre la fecha se pone sola en hoy (lo contado se conserva).
-    if (vista() !== 'conteoGrande' && C.fecha !== hoyISO()) { C.fecha = hoyISO(); C.editandoBase = false; guardarCaja(); }
+    // Al entrar al cuadre la fecha se pone sola en hoy (lo contado se conserva). Al editar, no.
+    if (!C.edicion && vista() !== 'conteoGrande' && C.fecha !== hoyISO()) { C.fecha = hoyISO(); C.editandoBase = false; guardarCaja(); }
     if (vista() === 'cajaHist' && S.pila[S.pila.length - 2] === 'caja') atras(); else if (vista() !== 'caja') ir('caja');
     cargarSiigo(false);
     // Historial para mostrar el cierre anterior debajo de cajón, caja fuerte y monedas.
@@ -902,8 +1217,50 @@ Object.assign(ACCIONES, {
     guardarCaja(); render();
   },
 
+  histEditar(d) {
+    const x = (S.cajaHist || []).find((y) => claveHist(y) === d.k);
+    if (!x) return;
+    const actual = S.caja;
+    if (actual && actual.edicion) {
+      if (claveHist(actual.edicion.orig) !== d.k && !confirm('Ya estás editando ' + nombreCuadre(actual.edicion.orig) + '. ¿Dejar esa edición y editar este?')) return;
+      S.caja = cajaDesdeHist(x, actual.edicion.borrador);
+    } else S.caja = cajaDesdeHist(x, actual);
+    guardarCaja();
+    ir('caja');
+    cargarMovsEdicion();
+  },
+  cajaEdCancelar() {
+    const C = S.caja;
+    if (!C || !C.edicion) return;
+    if (cambiosEdicion(C, cuentasCaja(C)).length && !confirm('¿Descartar los cambios de esta edición?')) return;
+    S.caja = C.edicion.borrador || nuevaCaja();
+    guardarCaja();
+    irRaiz(['inicio', 'cajaHist']);
+  },
+  cajaEdDeshacer() {
+    const C = S.caja;
+    if (!C || !C.edicion || !confirm('¿Volver a los datos guardados y deshacer los cambios?')) return;
+    const E = C.edicion;
+    const nueva = cajaDesdeHist(E.orig, E.borrador);
+    nueva.edicion.movs = E.movs; nueva.edicion.movsEstado = E.movsEstado;
+    S.caja = nueva; guardarCaja(); render();
+  },
+  cajaEdBase() { const E = S.caja.edicion; E.usarBaseNueva = !E.usarBaseNueva; S.caja.confirmar = null; guardarCaja(); refrescarCaja(); },
+  cajaEdSiigoGuardado() { const E = S.caja.edicion; E.usarSiigoNuevo = false; S.caja.confirmar = null; guardarCaja(); refrescarCaja(); },
+
   cajaGuardar() {
     const C = S.caja, K = cuentasCaja(C);
+    if (C.edicion) {
+      let falta = '';
+      if (!K.hayConteo) falta = 'El conteo no puede quedar vacío.';
+      else if (Object.keys(K.malos).length || K.restoMalo.length) falta = 'Corrige las casillas marcadas en rojo.';
+      else if (K.base === null) falta = 'Falta la base de caja al abrir.';
+      else if (!cambiosEdicion(C, K).length) falta = 'No hay cambios para guardar.';
+      if (falta) { aviso(falta, true); return; }
+      C.confirmar = { tipo: 'guardar' };
+      refrescarCaja();
+      return;
+    }
     let falta = '';
     if (!K.hayConteo) falta = 'Escribe el conteo antes de guardar.';
     else if (Object.keys(K.malos).length || K.restoMalo.length) falta = 'Corrige las casillas marcadas en rojo.';
@@ -928,6 +1285,7 @@ Object.assign(ACCIONES, {
         conteo[x.k] = { cantidad: c.cantidad === undefined ? '' : c.cantidad, valor: c.valor === undefined ? '' : c.valor };
       }
     });
+    if (C.edicion) { await guardarEdicion(C, conteo); return; }
     try {
       const r = await api('guardarCuadreCaja', {
         fecha: C.fecha, hora: horaCaja(C), tipo: C.tipo, conteo,
@@ -990,11 +1348,41 @@ Object.assign(ACCIONES, {
     S.cajaHistAbierta = S.cajaHistAbierta === d.k ? '' : d.k;
     render();
     const x = (S.cajaHist || []).find((y) => claveHist(y) === S.cajaHistAbierta);
-    if (x) cargarMovsHist(x);
+    if (x) { cargarMovsHist(x); cargarCambiosHist(x); }
   },
   histMovs() { S.cajaHistMovsAbierto = S.cajaHistMovsAbierto === false; refrescarMovsHist(); },
   histMovsReintentar(d) { const x = (S.cajaHist || []).find((y) => claveHist(y) === d.k); if (x) cargarMovsHist(x, true); },
 });
+
+async function guardarEdicion(C, conteo) {
+  const E = C.edicion, o = E.orig;
+  try {
+    const r = await api('guardarCuadreCaja', {
+      editar: true, fecha: o.fecha, hora: o.tipo === 'Parcial' ? o.hora : '', tipo: o.tipo, conteo,
+      cajon: C.cajon, cajaFuerte: C.cajaFuerte, monedas: C.monedas,
+      baseManual: C.baseManual === '' ? null : C.baseManual, base: E.usarBaseNueva ? 'nueva' : 'guardada',
+      siigo: E.usarSiigoNuevo && E.siigoNuevo ? 'actualizar' : 'guardado', observacion: C.obs, motivo: E.motivo || '',
+    });
+    S.cajaHist = r.historial;
+    Almacen.guardar('cajaHist', S.cajaHist).catch(() => {});
+    S.caja = E.borrador || nuevaCaja();
+    guardarCaja();
+    aviso('Edición ' + r.edicion + ' guardada (' + r.cambios + ' cambio(s)). ' + textoResultado(r.diferencia) + '.');
+    const k = claveHist(o);
+    if (S.cajaMovsHist) delete S.cajaMovsHist[k];
+    if (S.cajaCambiosHist) delete S.cajaCambiosHist[k];
+    S.cajaHistFiltro = 'todos';
+    S.cajaHistAbierta = k;
+    irRaiz(['inicio', 'cajaHist']);
+    const x = (S.cajaHist || []).find((y) => claveHist(y) === k);
+    if (x) { cargarMovsHist(x, true); cargarCambiosHist(x, true); }
+  } catch (e) {
+    C.guardando = false; C.confirmar = null;
+    if (e.codigo === 'NO_AUTORIZADO') S.sesionVencida = true;
+    aviso(e.codigo === 'RED' ? 'No se pudo conectar. Los cambios siguen aquí: intenta de nuevo.' : e.message, true);
+    refrescarCaja();
+  }
+}
 
 function cambiarCantidadGrande(paso) {
   const C = S.caja, x = DENOMS[idxGrande(C)];
@@ -1044,7 +1432,12 @@ appEl.addEventListener('input', (e) => {
     }
     el.classList.remove('calc');
   } else if (el.dataset.campoCaja === 'obs') {
-    C.obs = el.value; guardarCaja(); return;
+    C.obs = el.value; guardarCaja();
+    if (C.edicion) refrescarCaja();
+    return;
+  } else if (el.dataset.campoCaja === 'motivo') {
+    if (C.edicion) C.edicion.motivo = el.value;
+    guardarCaja(); return;
   } else if (['cajon', 'cajaFuerte', 'monedas', 'baseManual'].indexOf(el.dataset.campoCaja) >= 0) {
     C[el.dataset.campoCaja] = leerPesos(el.value);
     // Formato de moneda mientras se escribe ("$ 26.500.000"), si se escribe al final.
