@@ -541,3 +541,4 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .con-ref { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
 .ref-anterior { font-size: 13px; color: var(--gris); }
 .ref-anterior b { color: var(--tinta); }
+.detalle-mov { max-width: 420px; white-space: normal; overflow-wrap: anywhere; }

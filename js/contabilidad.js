@@ -103,6 +103,19 @@ function cuentasCaja(C) {
     aumento: hayConteo && base !== null ? r2(total - base) : null };
 }
 
+/**
+ * Detalle útil de un movimiento: la observación del documento en Siigo. Si solo
+ * dice la forma de pago (ej. "Caja Efectivo"), se deja en blanco, porque todos
+ * los movimientos de la lista ya son de la caja.
+ */
+function detalleMov(m) {
+  const d = String(m.detalle || '').trim();
+  if (!d) return '';
+  const n = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (n(d) === n(m.formaPago) || /^(caja\s+)?efectivo$/.test(n(d))) return '';
+  return d;
+}
+
 /* ---------------------------------------------------------------- Siigo */
 
 let cargaCaja = 0;
@@ -268,7 +281,7 @@ function htmlMovs(C, K) {
       cuerpo = `<div class="tabla-caja"><table>
         <thead><tr><th>Comprobante</th><th>Tercero</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
         <tbody>${sg.movimientos.map((m) => `<tr>
-          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td class="tenue">${h(m.detalle)}</td>
+          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td class="tenue detalle-mov">${h(detalleMov(m))}</td>
           <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num">${m.salida ? pesos(m.salida) : ''}</td>
           <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`).join('')}</tbody>
       </table></div>`;
@@ -544,9 +557,9 @@ function htmlMovsHist(x) {
       <span class="pequeno">Se guardó antes de que la app guardara los movimientos. Para traerlos, en la hoja usa <b>Siigo › Recuperar movimientos de cuadres ya guardados</b>.</span></div>`;
     else if (!d.movimientos.length) cuerpo = '<p class="tenue">Siigo no tenía movimientos de caja para este cuadre.</p>';
     else cuerpo = `<div class="h-tabla movs"><table>
-        <thead><tr><th>Comprobante</th><th>Tercero</th><th>Forma de pago</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
+        <thead><tr><th>Comprobante</th><th>Tercero</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
         <tbody>${d.movimientos.map((m) => `<tr>
-          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td>${h(m.formaPago)}</td>
+          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td class="tenue detalle-mov">${h(detalleMov(m))}</td>
           <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num">${m.salida ? pesos(m.salida) : ''}</td>
           <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`).join('')}</tbody>
       </table></div>
