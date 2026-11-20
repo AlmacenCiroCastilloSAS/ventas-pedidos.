@@ -29,6 +29,8 @@ for (let m = 6 * 60; m <= 21 * 60; m += 30) HORAS.push(String(Math.floor(m / 60)
 const r2 = (n) => Math.round(n * 100) / 100;
 const pesos = (n) => '$ ' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
 const conSigno = (n) => (n > 0 ? '+ ' : n < 0 ? '− ' : '') + pesos(Math.abs(n));
+/** Valor en casilla con formato de moneda: "$ 26.500.000". */
+const enDinero = (n) => (n === '' || n === null || n === undefined || !isFinite(Number(n)) ? '' : '$ ' + Number(n).toLocaleString('es-CO', { maximumFractionDigits: 2 }));
 const enInput = (n) => (n === '' || n === null || n === undefined || !isFinite(Number(n)) ? '' : Number(n).toLocaleString('es-CO', { maximumFractionDigits: 2 }));
 /** "26.500.000", "$ 1.200", "20000" o "1500,50" → número; '' si está vacío; NaN si no es válido. */
 function leerPesos(v) {
@@ -238,8 +240,34 @@ function htmlRefAnterior(C, k) {
   const v = a[k];
   if (v === null || v === undefined) return `Cierre del ${fechaCortaISO(a.fecha)}: sin detalle`;
   const hoy = C[k] === '' || C[k] === undefined || !isFinite(Number(C[k])) ? null : Number(C[k]);
-  const cambio = hoy === null ? '' : hoy === v ? ' · igual' : ` · ${hoy > v ? 'subió' : 'bajó'} ${pesos(Math.abs(hoy - v))}`;
-  return `Cierre del ${fechaCortaISO(a.fecha)}: <b>${pesos(v)}</b>${cambio}`;
+  const cambio = hoy === null ? '' : hoy === v ? 'igual' : `${hoy > v ? 'subió' : 'bajó'} ${pesos(Math.abs(hoy - v))}`;
+  return `<span>Cierre del ${fechaCortaISO(a.fecha)}: <b>${pesos(v)}</b></span>${cambio ? `<b class="rc-cambio ${hoy > v ? 'sube' : hoy < v ? 'baja' : ''}">${cambio}</b>` : ''}`;
+}
+
+/**
+ * Línea con el último cuadre guardado. Si el cuadre que se está haciendo
+ * (mismo día y tipo, y misma hora si es corte) ya se guardó, es un aviso
+ * amarillo para no subirlo dos veces.
+ */
+function htmlUltimo(C) {
+  const lista = S.cajaHist;
+  if (!lista) return `<div class="ultimo-cuadre" id="caja-ultimo">${IC.reloj ? IC.reloj(18) : ''}<span>${S.cajaHistCargando ? 'Buscando el último cuadre guardado…' : 'No se pudo ver el último cuadre guardado.'}</span></div>`;
+  const ddmm = (v) => { const d = aFecha(v); return d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') : ''; };
+  const quien = (x) => (x.guardadoEl ? ' · guardado el ' + ddmm(x.guardadoEl) + ' a las ' + hora(x.guardadoEl) : '') + (x.guardadoPor ? ' por ' + x.guardadoPor : '');
+  const nombre = (x) => (x.tipo === 'Parcial' ? 'Corte de las ' + x.hora : 'Cierre') + ' del ' + fechaLarga(x.fecha).toLowerCase().replace(/\/\d{4}$/, '');
+  const dia = fechaCortaISO(C.fecha);
+  const esHoy = C.fecha === hoyISO();
+  const igual = lista.find((x) => x.fecha === C.fecha && x.tipo === C.tipo && (C.tipo === 'Cierre' || x.hora === C.hora));
+  if (igual) {
+    const que = C.tipo === 'Cierre' ? 'El cierre' : 'El corte de las ' + C.hora;
+    return `<div class="ultimo-cuadre aviso" id="caja-ultimo">${IC.alerta(18)}<span><b>${que} ${esHoy ? 'de hoy (' + dia + ')' : 'del ' + dia} ya está guardado</b>${h(quien(igual))} · Si guardas de nuevo, la app preguntará si lo reemplazas.</span></div>`;
+  }
+  const delDia = lista.filter((x) => x.fecha === C.fecha);
+  const ultimo = lista.find((x) => x.neto !== null) || lista[0];
+  const ese = delDia.length
+    ? `${esHoy ? 'Hoy' : 'El ' + dia} ya hay: ${delDia.map((x) => (x.tipo === 'Parcial' ? 'corte de las ' + x.hora : 'cierre')).join(', ')}.`
+    : `${esHoy ? 'Hoy' : 'El ' + dia} todavía no hay cuadres guardados.`;
+  return `<div class="ultimo-cuadre" id="caja-ultimo">${IC.reloj ? IC.reloj(18) : ''}<span>${ultimo ? `Último cuadre guardado: <b>${h(nombre(ultimo))}</b>${h(quien(ultimo))} · ` : ''}${h(ese)}</span></div>`;
 }
 
 /** Resumen de la caja menor: total y una etiqueta por denominación. */
@@ -325,8 +353,6 @@ function htmlResultado(C, K) {
 function htmlGuardar(C, K) {
   const sg = K.sg;
   const cuando = sg && sg.consultado ? hora(sg.consultado) : '';
-  const guardados = sg && sg.guardados && sg.guardados.length
-    ? `<p class="pequeno tenue">Ya guardado ese día: ${sg.guardados.map((g) => g.tipo + (g.hora ? ' ' + g.hora : '')).join(', ')}.</p>` : '';
   const etiqueta = C.tipo === 'Cierre' ? 'Guardar cierre del ' + fechaCortaISO(C.fecha) : 'Guardar corte de las ' + (C.hora || '—');
   let cuerpo;
   if (C.confirmar) {
@@ -345,7 +371,6 @@ function htmlGuardar(C, K) {
       <span class="${C.cargando ? 'girando-ic' : ''}">${IC.sync(20)}</span> ${C.cargando ? 'Consultando Siigo…' : 'Actualizar desde Siigo'}</button>
     <span class="pequeno tenue" style="text-align:center">${cuando ? `Siigo consultado a las ${h(cuando)} · se actualiza solo al entrar a Contabilidad` : 'Se actualiza solo al entrar a Contabilidad'}</span>
     ${C.error ? `<div class="tarjeta alerta" style="padding:10px 12px"><b class="pequeno">${h(C.error)}</b></div>` : ''}
-    ${guardados}
     ${cuerpo}
   </div>`;
 }
@@ -365,7 +390,8 @@ VISTAS.caja = () => {
         <div class="conta-col">
           <section class="panel fila-sup">
             <div class="campo-pc"><label for="cfecha">Fecha del cuadre</label>
-              <input id="cfecha" type="date" max="${hoyISO()}" value="${h(C.fecha)}" data-campo-caja="fecha"></div>
+              <input id="cfecha" type="date" max="${hoyISO()}" value="${h(C.fecha)}" data-campo-caja="fecha">
+              ${C.fecha === hoyISO() ? '<span class="pastilla-hoy">Hoy</span>' : '<button type="button" class="btn-borde chico-hoy" data-accion="cajaHoy">Volver a hoy</button>'}</div>
             <div class="campo-pc"><span class="lbl" id="ctipo">Tipo</span>
               <div class="seg" role="group" aria-labelledby="ctipo">
                 <button type="button" class="${C.tipo === 'Cierre' ? 'sel' : ''}" aria-pressed="${C.tipo === 'Cierre'}" data-accion="cajaTipo" data-v="Cierre">Cierre del día</button>
@@ -377,6 +403,7 @@ VISTAS.caja = () => {
               </select></div>
             ${htmlBase(C, K)}
           </section>
+          ${htmlUltimo(C)}
 
           <section class="panel">
             ${htmlResumenMenor(C, K)}
@@ -388,15 +415,19 @@ VISTAS.caja = () => {
           </section>
 
           <section class="panel">
-            <div class="tres-campos">
+            <div class="resto-cab">
               <h2>Resto de la caja</h2>
-              ${[['cajon', 'Cajón'], ['cajaFuerte', 'Caja fuerte'], ['monedas', 'Monedas (reserva)']].map(([k, t]) => `<div class="campo-pc">
-                <label for="c-${k}">${t}</label>
-                <div class="con-ref">
-                  <input id="c-${k}" class="pesos-in grande" type="text" inputmode="decimal" data-campo-caja="${k}" data-nav value="${h(enInput(C[k]))}" placeholder="$ 0" autocomplete="off" aria-describedby="ref-${k}">
-                  <span class="ref-anterior" id="ref-${k}">${htmlRefAnterior(C, k)}</span>
+              <span class="resto-total">Total <b id="resto-total">${pesos(K.resto)}</b></span>
+            </div>
+            <div class="resto-grid">
+              ${[['cajon', 'Cajón', 'cajon'], ['cajaFuerte', 'Caja fuerte', 'fuerte'], ['monedas', 'Monedas (reserva)', 'monedas']].map(([k, t, c]) => `<div class="resto-card ${K.restoMalo.indexOf(k) >= 0 ? 'error' : ''}">
+                <div class="rc-arriba">
+                  <label for="c-${k}"><i class="rc-color ${c}" aria-hidden="true"></i>${t}</label>
+                  <input id="c-${k}" class="dinero-in" type="text" inputmode="decimal" data-campo-caja="${k}" data-nav value="${h(enDinero(C[k]))}" placeholder="$ 0" autocomplete="off" aria-describedby="ref-${k}">
+                  ${K.restoMalo.indexOf(k) >= 0 ? '<span class="error-txt">Escribe solo números.</span>' : ''}
                 </div>
-                ${K.restoMalo.indexOf(k) >= 0 ? '<span class="error-txt">Escribe solo números.</span>' : ''}</div>`).join('')}
+                <div class="rc-pie" id="ref-${k}">${htmlRefAnterior(C, k)}</div>
+              </div>`).join('')}
             </div>
             <div class="entre"><button type="button" class="enlace" data-accion="cajaNuevo">Borrar el conteo y empezar de nuevo</button>
               <span class="pequeno tenue">Lo escrito se guarda en este equipo hasta que guardes el cuadre.</span></div>
@@ -426,6 +457,7 @@ function refrescarCaja() {
     'caja-movs': htmlMovs(C, K),
     'caja-base': htmlBase(C, K),
     'caja-resumen': htmlResumenMenor(C, K),
+    'caja-ultimo': htmlUltimo(C),
   };
   Object.keys(nuevos).forEach((id) => {
     const viejo = document.getElementById(id);
@@ -440,7 +472,11 @@ function refrescarCaja() {
   ['cajon', 'cajaFuerte', 'monedas'].forEach((k) => {
     const el = document.getElementById('ref-' + k);
     if (el) el.innerHTML = htmlRefAnterior(C, k);
+    const card = document.getElementById('c-' + k);
+    if (card) card.closest('.resto-card').classList.toggle('error', K.restoMalo.indexOf(k) >= 0);
   });
+  const rt = document.getElementById('resto-total');
+  if (rt) rt.textContent = pesos(K.resto);
   DENOMS.forEach((x) => {
     const td = document.querySelector(`[data-sub="${x.k}"]`);
     if (!td) return;
@@ -775,6 +811,8 @@ Object.assign(ACCIONES, {
     if (!S.caja) S.caja = nuevaCaja();
     const C = S.caja;
     C.confirmar = null; C.guardando = false;
+    // Al entrar al cuadre la fecha se pone sola en hoy (lo contado se conserva).
+    if (vista() !== 'conteoGrande' && C.fecha !== hoyISO()) { C.fecha = hoyISO(); C.editandoBase = false; guardarCaja(); }
     if (vista() === 'cajaHist' && S.pila[S.pila.length - 2] === 'caja') atras(); else if (vista() !== 'caja') ir('caja');
     cargarSiigo(false);
     // Historial para mostrar el cierre anterior debajo de cajón, caja fuerte y monedas.
@@ -801,6 +839,7 @@ Object.assign(ACCIONES, {
     guardarCaja(); render(); cargarSiigo(false);
   },
 
+  cajaHoy() { S.caja.fecha = hoyISO(); S.caja.confirmar = null; guardarCaja(); render(); cargarSiigo(false); },
   cajaTabla() { S.caja.tablaAbierta = !S.caja.tablaAbierta; guardarCaja(); render(); },
   cajaMovs() { S.caja.movsAbierto = !S.caja.movsAbierto; guardarCaja(); refrescarCaja(); },
   cajaActualizar() { cargarSiigo(true); },
@@ -961,6 +1000,9 @@ appEl.addEventListener('input', (e) => {
     C.obs = el.value; guardarCaja(); return;
   } else if (['cajon', 'cajaFuerte', 'monedas', 'baseManual'].indexOf(el.dataset.campoCaja) >= 0) {
     C[el.dataset.campoCaja] = leerPesos(el.value);
+    // Formato de moneda mientras se escribe ("$ 26.500.000"), si se escribe al final.
+    const v = C[el.dataset.campoCaja];
+    if (el.classList.contains('dinero-in') && el.selectionStart === el.value.length && v !== '' && isFinite(v) && !/,/.test(el.value)) el.value = enDinero(v);
   } else return;
   C.confirmar = null;
   guardarCaja();
@@ -983,6 +1025,9 @@ appEl.addEventListener('change', (e) => {
     // Al salir de la casilla se muestra con puntos de miles (26.500.000).
     const v = leerPesos(el.value);
     if (v !== '' && isFinite(v)) el.value = enInput(v);
+  } else if (el.classList.contains('dinero-in')) {
+    const v = leerPesos(el.value);
+    if (v !== '' && isFinite(v)) el.value = enDinero(v);
   }
 });
 

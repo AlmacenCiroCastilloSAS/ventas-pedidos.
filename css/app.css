@@ -542,3 +542,34 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .ref-anterior { font-size: 13px; color: var(--gris); }
 .ref-anterior b { color: var(--tinta); }
 .detalle-mov { max-width: 420px; white-space: normal; overflow-wrap: anywhere; }
+
+/* Resto de la caja: tres tarjetas (cajón, caja fuerte, monedas) */
+.resto-cab { display: flex; align-items: center; gap: 12px; }
+.resto-cab h2 { font-size: 18px; flex: 1 1 auto; }
+.resto-total { padding: 4px 14px; border-radius: 10px; background: var(--verde-suave); font-weight: 700; }
+.resto-total b { font-size: 20px; margin-left: 4px; }
+.resto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.resto-card { border: 2px solid var(--borde); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; background: var(--blanco); }
+.resto-card.error { border-color: var(--terracota); }
+.rc-arriba { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.rc-arriba label { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+.rc-color { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.rc-color.cajon { background: var(--amarillo-borde); }
+.rc-color.fuerte { background: var(--azul); }
+.rc-color.monedas { background: var(--terracota); }
+.dinero-in { height: 46px; box-sizing: border-box; border: 2px solid var(--tinta); border-radius: 10px; padding: 0 12px; font: inherit; font-size: 22px; font-weight: 700; text-align: right; background: var(--blanco); width: 100%; }
+.dinero-in:focus { border-color: var(--azul); }
+.resto-card.error .dinero-in { border-color: var(--terracota); background: var(--terracota-suave); }
+.rc-pie { padding: 7px 14px; background: var(--fondo-2); display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--gris); min-height: 20px; }
+.rc-pie b { color: var(--tinta); }
+.rc-pie .rc-cambio { white-space: nowrap; color: var(--gris); }
+.rc-pie .rc-cambio.sube { color: var(--verde); }
+.rc-pie .rc-cambio.baja { color: var(--terracota-texto); }
+
+/* Último cuadre guardado (debajo de la fecha) */
+.ultimo-cuadre{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:10px;background:#fff;border:2px solid var(--borde,#C9D3E3);font-size:14px;color:#3B4252;line-height:1.3}
+.ultimo-cuadre svg{flex:0 0 auto}
+.ultimo-cuadre b{color:#0B1220}
+.ultimo-cuadre.aviso{background:#FFF4D6;border-color:#E0B341;color:#0B1220}
+.pastilla-hoy{display:inline-block;margin-left:8px;border-radius:999px;padding:3px 10px;background:#E7F3EC;color:#1F5F3F;font-weight:700;font-size:13px;white-space:nowrap}
+.chico-hoy{margin-left:8px;min-height:36px;padding:0 12px;white-space:nowrap}
