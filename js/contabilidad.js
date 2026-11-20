@@ -144,7 +144,7 @@ async function cargarHistorialCaja() {
   } catch (e) {
     S.cajaHistError = e.codigo === 'RED' ? 'No se pudo conectar. Se muestra lo último descargado.' : e.message;
   } finally {
-    S.cajaHistCargando = false; refrescarHist();
+    S.cajaHistCargando = false; refrescarHist(); refrescarCaja();
   }
 }
 
@@ -192,7 +192,7 @@ function htmlBase(C, K) {
   else if (sg) { valor = '—'; nota = 'No hay un cierre guardado antes de esta fecha: escríbela'; }
   else { valor = '…'; nota = C.cargando ? 'Consultando…' : 'Sin datos todavía'; }
   return `<div class="base-caja" id="caja-base">
-    <span class="t">Base de caja al abrir · ${h(nota)}</span>
+    <span class="t">Base al abrir · ${h(nota)}</span>
     <span class="fila"><b class="v">${valor}</b><button type="button" class="enlace" data-accion="cajaEditarBase">Cambiar</button></span>
   </div>`;
 }
@@ -211,6 +211,47 @@ function htmlTablaConteo(C, K, tipo) {
   return `<div class="tabla-caja"><table class="conteo">
     <thead><tr><th>${tipo === 'b' ? 'Billete' : 'Moneda'}</th><th>Cantidad</th><th>o Valor total</th><th class="num">Subtotal</th></tr></thead>
     <tbody>${filas}</tbody></table></div>`;
+}
+
+/** Último cierre guardado antes de la fecha del cuadre (el mismo que da la base). */
+function cierreAnterior(C) {
+  return (S.cajaHist || []).find((x) => x.tipo === 'Cierre' && x.fecha < C.fecha) || null;
+}
+
+/** "Cierre del 18/11: $ 6.000.000" debajo de cajón, caja fuerte y monedas. */
+function htmlRefAnterior(C, k) {
+  const a = cierreAnterior(C);
+  if (!a) return S.cajaHistCargando ? 'Buscando el cierre anterior…' : 'Sin cierre anterior guardado';
+  const v = a[k];
+  if (v === null || v === undefined) return `Cierre del ${fechaCortaISO(a.fecha)}: sin detalle`;
+  const hoy = C[k] === '' || C[k] === undefined || !isFinite(Number(C[k])) ? null : Number(C[k]);
+  const cambio = hoy === null ? '' : hoy === v ? ' · igual' : ` · ${hoy > v ? 'subió' : 'bajó'} ${pesos(Math.abs(hoy - v))}`;
+  return `Cierre del ${fechaCortaISO(a.fecha)}: <b>${pesos(v)}</b>${cambio}`;
+}
+
+/** Resumen de la caja menor: total y una etiqueta por denominación. */
+function htmlResumenMenor(C, K) {
+  const chip = (x) => {
+    const c = C.conteo[x.k] || {};
+    const v = K.subs[x.k] || 0;
+    const malo = K.malos[x.k];
+    const cant = c.cantidad !== '' && c.cantidad !== undefined && isFinite(c.cantidad) ? Number(c.cantidad) : v / x.d;
+    const cls = malo ? 'malo' : v ? 'con' : '';
+    return `<span class="r-chip ${cls}"><b>${h(x.n)}</b> ${malo ? 'revisar' : v ? '× ' + cant + ' = ' + pesos(v) : '—'}</span>`;
+  };
+  const con = DENOMS.filter((x) => K.subs[x.k] > 0).length;
+  return `<div class="r-menor" id="caja-resumen">
+    <div class="r-total"><h2>Caja menor</h2><b id="caja-menor">${pesos(K.menor)}</b>
+      <span class="pequeno tenue">${con} de ${DENOMS.length} denominaciones con dinero</span></div>
+    <div class="r-chips">
+      <div class="r-fila"><b class="r-et billetes">BILLETES</b>${DENOMS.filter((x) => x.t === 'b').map(chip).join('')}</div>
+      <div class="r-fila"><b class="r-et monedas">MONEDAS</b>${DENOMS.filter((x) => x.t === 'm').map(chip).join('')}</div>
+    </div>
+    <div class="r-botones">
+      <button type="button" class="btn verde chico" data-accion="conteoGrande">${IC.billete(22)} Contar en pantalla grande</button>
+      <button type="button" class="btn-borde" data-accion="cajaTabla" aria-expanded="${!!C.tablaAbierta}">${C.tablaAbierta ? 'Ocultar la tabla' : 'Editar aquí en tabla'}</button>
+    </div>
+  </div>`;
 }
 
 function htmlMovs(C, K) {
@@ -253,9 +294,6 @@ function htmlResultado(C, K) {
   else if (K.dif > 0) estado = `<section class="res-estado sobra"><span class="t">${IC.alerta(20)} Sobra efectivo</span><span class="cifra-res">${conSigno(K.dif)}</span><span class="pequeno">Hay más dinero del que Siigo dice que debería haber.</span></section>`;
   else estado = `<section class="res-estado falta"><span class="t">${IC.alerta(20)} Falta efectivo</span><span class="cifra-res">${conSigno(K.dif)}</span><span class="pequeno">Hay menos dinero del que Siigo dice que debería haber.</span></section>`;
   const fila = (t, v, fuerte) => `<div class="fila-des ${fuerte ? 'fuerte' : ''}"><span>${t}</span><b>${v}</b></div>`;
-  const revisar = sg && sg.revisar && sg.revisar.length
-    ? `<section class="panel chico"><h3>Para revisar en Siigo</h3>${sg.revisar.map((t) => `<p class="pequeno">· ${h(t)}</p>`).join('')}
-       <p class="tenue pequeno">Para buscar el origen de una diferencia en todos los documentos: en la hoja, menú Siigo › Buscar un valor en Siigo.</p></section>` : '';
   return `<div id="caja-resultado" class="conta-lado-res">
     ${estado}
     <section class="panel desglose">
@@ -268,7 +306,6 @@ function htmlResultado(C, K) {
       ${fila('Efectivo contado', K.hayConteo ? pesos(K.total) : '—', true)}
       ${fila('Aumento o disminución del efectivo', K.aumento !== null ? conSigno(K.aumento) : '—')}
     </section>
-    ${revisar}
   </div>`;
 }
 
@@ -307,7 +344,7 @@ VISTAS.caja = () => {
   const K = cuentasCaja(C);
   return {
     completo: true,
-    clase: 'conta-cuerpo',
+    clase: 'conta-cuerpo caja-fija',
     barra: barra('Contabilidad', 'Cuadre de caja · cuenta 11050501 Caja general', { clase: 'verde' }),
     cuerpo: `<div class="conta">
       ${navConta('caja')}
@@ -329,24 +366,23 @@ VISTAS.caja = () => {
           </section>
 
           <section class="panel">
-            <div class="entre" style="flex-wrap:wrap;align-items:baseline">
-              <h2>Caja menor · conteo de billetes y monedas</h2>
-              <button type="button" class="btn verde chico" data-accion="conteoGrande">${IC.billete(22)} Contar en pantalla grande</button>
-            </div>
-            <span class="pequeno tenue">Escribe la cantidad o el valor. Enter pasa a la siguiente casilla. Si la pantalla está lejos de los billetes, usa <b>Contar en pantalla grande</b>.</span>
+            ${htmlResumenMenor(C, K)}
+            ${C.tablaAbierta ? `<span class="pequeno tenue">Escribe la cantidad o el valor. Enter pasa a la siguiente casilla.</span>
             <div class="dos-tablas">
               <div>${htmlTablaConteo(C, K, 'b')}</div>
-              <div>${htmlTablaConteo(C, K, 'm')}
-                <div class="total-menor"><span>Total caja menor</span><b id="caja-menor">${pesos(K.menor)}</b></div></div>
-            </div>
+              <div>${htmlTablaConteo(C, K, 'm')}</div>
+            </div>` : ''}
           </section>
 
           <section class="panel">
-            <h2>Resto de la caja general</h2>
             <div class="tres-campos">
+              <h2>Resto de la caja</h2>
               ${[['cajon', 'Cajón'], ['cajaFuerte', 'Caja fuerte'], ['monedas', 'Monedas (reserva)']].map(([k, t]) => `<div class="campo-pc">
                 <label for="c-${k}">${t}</label>
-                <input id="c-${k}" class="pesos-in grande" type="text" inputmode="decimal" data-campo-caja="${k}" data-nav value="${h(enInput(C[k]))}" placeholder="$ 0" autocomplete="off">
+                <div class="con-ref">
+                  <input id="c-${k}" class="pesos-in grande" type="text" inputmode="decimal" data-campo-caja="${k}" data-nav value="${h(enInput(C[k]))}" placeholder="$ 0" autocomplete="off" aria-describedby="ref-${k}">
+                  <span class="ref-anterior" id="ref-${k}">${htmlRefAnterior(C, k)}</span>
+                </div>
                 ${K.restoMalo.indexOf(k) >= 0 ? '<span class="error-txt">Escribe solo números.</span>' : ''}</div>`).join('')}
             </div>
             <div class="entre"><button type="button" class="enlace" data-accion="cajaNuevo">Borrar el conteo y empezar de nuevo</button>
@@ -376,6 +412,7 @@ function refrescarCaja() {
     'caja-guardar': htmlGuardar(C, K),
     'caja-movs': htmlMovs(C, K),
     'caja-base': htmlBase(C, K),
+    'caja-resumen': htmlResumenMenor(C, K),
   };
   Object.keys(nuevos).forEach((id) => {
     const viejo = document.getElementById(id);
@@ -387,6 +424,10 @@ function refrescarCaja() {
     viejo.replaceWith(t.content.firstElementChild);
     if (enfocado) { const b = document.querySelector(`#${id} [data-accion="${enfocado}"]`); if (b) b.focus(); }
   });
+  ['cajon', 'cajaFuerte', 'monedas'].forEach((k) => {
+    const el = document.getElementById('ref-' + k);
+    if (el) el.innerHTML = htmlRefAnterior(C, k);
+  });
   DENOMS.forEach((x) => {
     const td = document.querySelector(`[data-sub="${x.k}"]`);
     if (!td) return;
@@ -394,8 +435,6 @@ function refrescarCaja() {
     td.innerHTML = malo ? `<span class="error-txt">${h(malo)}</span>` : K.subs[x.k] ? pesos(K.subs[x.k]) : '—';
     td.closest('tr').classList.toggle('error', !!malo);
   });
-  const menor = document.getElementById('caja-menor');
-  if (menor) menor.textContent = pesos(K.menor);
 }
 
 /* --------------------------------------------------- Historial de cuadres */
@@ -725,6 +764,9 @@ Object.assign(ACCIONES, {
     C.confirmar = null; C.guardando = false;
     if (vista() === 'cajaHist' && S.pila[S.pila.length - 2] === 'caja') atras(); else if (vista() !== 'caja') ir('caja');
     cargarSiigo(false);
+    // Historial para mostrar el cierre anterior debajo de cajón, caja fuerte y monedas.
+    if (!S.cajaHist) Almacen.leer('cajaHist').then((v) => { if (v && !S.cajaHist) { S.cajaHist = v; refrescarCaja(); } }).catch(() => {});
+    cargarHistorialCaja();
   },
 
   irCajaHist() {
@@ -746,6 +788,7 @@ Object.assign(ACCIONES, {
     guardarCaja(); render(); cargarSiigo(false);
   },
 
+  cajaTabla() { S.caja.tablaAbierta = !S.caja.tablaAbierta; guardarCaja(); render(); },
   cajaMovs() { S.caja.movsAbierto = !S.caja.movsAbierto; guardarCaja(); refrescarCaja(); },
   cajaActualizar() { cargarSiigo(true); },
   cajaEditarBase() {

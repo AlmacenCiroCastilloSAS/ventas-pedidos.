@@ -471,3 +471,73 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .h-meta { display: flex; flex-wrap: wrap; gap: 10px 28px; padding: 12px 16px; border-radius: 14px; background: var(--fondo-2); font-size: 15px; }
 #h-movs .plegable { min-height: 44px; }
 .h-tabla.movs td { vertical-align: top; }
+
+/* ==========================================================================
+   Cuadre compacto para PC (1080p): resumen de caja menor y todo en una pantalla
+   ========================================================================== */
+.r-menor { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
+.r-total { flex: 0 0 230px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding-right: 18px; border-right: 2px solid var(--linea); }
+.r-total h2 { font-size: 18px; }
+.r-total b { font-size: 30px; line-height: 1.1; }
+.r-chips { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.r-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.r-et { width: 76px; font-size: 13px; }
+.r-et.billetes { color: var(--azul); }
+.r-et.monedas { color: var(--terracota-texto); }
+.r-chip { border-radius: 8px; padding: 4px 9px; font-size: 13.5px; background: var(--fondo-2); color: var(--gris-2); border: 1px solid var(--linea); white-space: nowrap; }
+.r-chip.con { background: var(--verde-suave); color: var(--tinta); border-color: var(--verde); }
+.r-chip.malo { background: var(--terracota-suave); color: var(--terracota-texto); border-color: var(--terracota); font-weight: 700; }
+.r-botones { flex: 0 0 270px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.r-botones .btn { min-height: 46px; font-size: 16px; }
+.r-botones .btn-borde { min-height: 40px; }
+.tres-campos h2 { font-size: 18px; align-self: center; }
+.tres-campos { grid-template-columns: auto repeat(3, minmax(160px, 1fr)); align-items: end; }
+
+@media (min-width: 1200px) {
+  .caja-fija .conta { font-size: 15px; }
+  .caja-fija .conta-main { padding: 14px 18px; gap: 14px; }
+  .caja-fija .conta-col { gap: 12px; }
+  .caja-fija .panel { padding: 10px 16px; gap: 8px; border-radius: 14px; }
+  .caja-fija .fila-sup { gap: 14px; align-items: center; flex-wrap: nowrap; }
+  .caja-fija .fila-sup .campo-pc label, .caja-fija .fila-sup .campo-pc .lbl { white-space: nowrap; }
+  .caja-fija .fila-sup .campo-pc { flex: 0 0 auto; }
+  .caja-fija .seg button { white-space: nowrap; }
+  .caja-fija .fila-sup .base-caja { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .caja-fija .fila-sup .campo-pc { flex-direction: row; align-items: center; gap: 8px; }
+  .caja-fija .campo-pc input, .caja-fija .campo-pc select { min-height: 40px; font-size: 16px; }
+  .caja-fija .seg button { min-height: 38px; }
+  .caja-fija .base-caja { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 12px; margin-left: auto; flex: 0 1 auto; }
+  .caja-fija .base-caja .v { font-size: 20px; }
+  .caja-fija .tres-campos .campo-pc { flex-direction: row; align-items: center; }
+  .caja-fija .tres-campos .campo-pc label { white-space: nowrap; }
+  .caja-fija .pesos-in.grande { min-height: 42px; font-size: 18px; }
+  .caja-fija table.conteo td, .caja-fija table.conteo th { padding: 3px 8px; }
+  .caja-fija .cant-in, .caja-fija .pesos-in { min-height: 32px; }
+  .caja-fija .conta-lado { gap: 10px; }
+  .caja-fija .res-estado { padding: 10px 14px; }
+  .caja-fija .res-estado .cifra-res { font-size: 28px; }
+  .caja-fija .desglose { padding: 2px 14px; }
+  .caja-fija .fila-des { padding: 6px 0; }
+  .caja-fija .campo-pc textarea { min-height: 56px; }
+  .caja-fija .conta-guardar .btn { min-height: 50px; }
+  .caja-fija .conta-guardar .btn.chico { min-height: 42px; }
+}
+
+/* En pantallas de computador de 760 px de alto o más, el cuadre ocupa justo la
+   pantalla: la página no se desplaza y la tabla de movimientos de Siigo se
+   desplaza dentro de su propio recuadro. */
+@media (min-width: 1200px) and (min-height: 760px) {
+  #app.completo:has(.caja-fija) { height: 100vh; height: 100dvh; overflow: hidden; }
+  .cuerpo.caja-fija { min-height: 0; overflow: hidden; }
+  .caja-fija .conta { height: 100%; min-height: 0; flex-wrap: nowrap; }
+  .caja-fija .conta-nav { overflow: auto; }
+  .caja-fija .conta-main { height: 100%; box-sizing: border-box; overflow: auto; align-items: stretch; flex-wrap: nowrap; }
+  .caja-fija .conta-col { height: 100%; min-height: 0; }
+  .caja-fija #caja-movs { flex: 1 1 0; min-height: 180px; }
+  .caja-fija #caja-movs-lista { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .caja-fija #caja-movs-lista .tabla-caja { overflow: visible; }
+  .caja-fija .conta-lado { flex: 0 0 360px; overflow: auto; position: static; }
+}
+.con-ref { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.ref-anterior { font-size: 13px; color: var(--gris); }
+.ref-anterior b { color: var(--tinta); }
