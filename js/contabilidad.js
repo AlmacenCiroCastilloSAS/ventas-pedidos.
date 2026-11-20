@@ -212,20 +212,38 @@ function htmlBase(C, K) {
   </div>`;
 }
 
+const ICONO_DEN = {
+  b: '<svg class="ico-den" width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M1.5 2.5h19v11h-19z"/><circle cx="11" cy="8" r="3"/></svg>',
+  m: '<svg class="ico-den" width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="8" r="6"/><circle cx="11" cy="8" r="2.5"/></svg>',
+};
+
+/** Pie de la tabla: barra de avance, cuántas tienen dinero y el subtotal. */
+function htmlPieConteo(K, tipo) {
+  const ds = DENOMS.filter((x) => x.t === tipo);
+  const con = ds.filter((x) => K.subs[x.k] > 0 && !K.malos[x.k]).length;
+  const total = ds.reduce((a, x) => a + (K.malos[x.k] ? 0 : K.subs[x.k] || 0), 0);
+  return `<span class="pie-barra" aria-hidden="true"><span style="width:${Math.round((con / ds.length) * 100)}%"></span></span>
+    <span class="tenue">${con} de ${ds.length} con dinero</span><span class="esp"></span>
+    <span><b>Subtotal ${tipo === 'b' ? 'billetes' : 'monedas'}</b> <b class="pie-total">${pesos(r2(total))}</b></span>`;
+}
+
 function htmlTablaConteo(C, K, tipo) {
   const filas = DENOMS.filter((x) => x.t === tipo).map((x) => {
     const c = C.conteo[x.k] || {};
     const malo = K.malos[x.k];
-    return `<tr class="${malo ? 'error' : ''}">
-      <th scope="row">${h(x.n)}</th>
-      <td><input class="cant-in" type="text" inputmode="numeric" data-den="${x.k}" data-parte="cantidad" data-nav value="${h(c.cantidad === undefined ? '' : c.cantidad)}" aria-label="Cantidad de ${h(x.n)}" autocomplete="off"></td>
-      <td><input class="pesos-in" type="text" inputmode="decimal" data-den="${x.k}" data-parte="valor" data-nav value="${h(enInput(c.valor))}" aria-label="Valor total de ${h(x.n)}" autocomplete="off"></td>
+    const con = !malo && K.subs[x.k] > 0;
+    return `<tr class="${malo ? 'error' : con ? 'con' : ''}">
+      <th scope="row"><span class="den-c">${ICONO_DEN[tipo]}${h(x.n)}</span></th>
+      <td><input class="cant-in" type="text" inputmode="numeric" placeholder="0" data-den="${x.k}" data-parte="cantidad" data-nav value="${h(c.cantidad === undefined ? '' : c.cantidad)}" aria-label="Cantidad de ${h(x.n)}" autocomplete="off"></td>
+      <td><span class="con-signo"><span aria-hidden="true">$</span><input class="pesos-in" type="text" inputmode="decimal" placeholder="0" data-den="${x.k}" data-parte="valor" data-nav value="${h(enInput(c.valor))}" aria-label="Valor de ${h(x.n)}" autocomplete="off"></span></td>
       <td class="num" data-sub="${x.k}">${malo ? `<span class="error-txt">${h(malo)}</span>` : K.subs[x.k] ? pesos(K.subs[x.k]) : '—'}</td>
     </tr>`;
   }).join('');
-  return `<div class="tabla-caja"><table class="conteo">
-    <thead><tr><th>${tipo === 'b' ? 'Billete' : 'Moneda'}</th><th>Cantidad</th><th>o Valor total</th><th class="num">Subtotal</th></tr></thead>
-    <tbody>${filas}</tbody></table></div>`;
+  return `<div class="tabla-conteo">
+    <table class="conteo">
+    <thead><tr><th>${tipo === 'b' ? 'Billetes' : 'Monedas'}</th><th class="num">Cantidad</th><th class="num">Valor</th><th class="num">Subtotal</th></tr></thead>
+    <tbody>${filas}</tbody></table>
+    <div class="pie-conteo" id="pie-${tipo}">${htmlPieConteo(K, tipo)}</div></div>`;
 }
 
 /** Último cierre guardado antes de la fecha del cuadre (el mismo que da la base). */
@@ -407,8 +425,7 @@ VISTAS.caja = () => {
 
           <section class="panel">
             ${htmlResumenMenor(C, K)}
-            ${C.tablaAbierta ? `<span class="pequeno tenue">Escribe la cantidad o el valor. Enter pasa a la siguiente casilla.</span>
-            <div class="dos-tablas">
+            ${C.tablaAbierta ? `<div class="dos-tablas" title="Escribe la cantidad o el valor. Enter pasa a la siguiente casilla.">
               <div>${htmlTablaConteo(C, K, 'b')}</div>
               <div>${htmlTablaConteo(C, K, 'm')}</div>
             </div>` : ''}
@@ -483,7 +500,9 @@ function refrescarCaja() {
     const malo = K.malos[x.k];
     td.innerHTML = malo ? `<span class="error-txt">${h(malo)}</span>` : K.subs[x.k] ? pesos(K.subs[x.k]) : '—';
     td.closest('tr').classList.toggle('error', !!malo);
+    td.closest('tr').classList.toggle('con', !malo && K.subs[x.k] > 0);
   });
+  ['b', 'm'].forEach((t) => { const pie = document.getElementById('pie-' + t); if (pie) pie.innerHTML = htmlPieConteo(K, t); });
 }
 
 /* --------------------------------------------------- Historial de cuadres */

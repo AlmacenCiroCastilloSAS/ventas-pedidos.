@@ -573,3 +573,34 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .ultimo-cuadre.aviso{background:#FFF4D6;border-color:#E0B341;color:#0B1220}
 .pastilla-hoy{display:inline-block;margin-left:8px;border-radius:999px;padding:3px 10px;background:#E7F3EC;color:#1F5F3F;font-weight:700;font-size:13px;white-space:nowrap}
 .chico-hoy{margin-left:8px;min-height:36px;padding:0 12px;white-space:nowrap}
+
+/* Tabla de conteo de la caja menor (opción C: encabezado verde, ícono y pie con avance) */
+.tabla-conteo { border: 2px solid var(--borde); border-radius: 10px; overflow: hidden; background: var(--blanco); }
+.tabla-conteo table.conteo { width: 100%; border-collapse: collapse; }
+.tabla-conteo thead th { background: var(--verde); color: var(--blanco); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; text-align: left; padding: 5px 12px; }
+.tabla-conteo thead th.num { text-align: right; }
+.tabla-conteo tbody tr { border-bottom: 1px solid var(--linea); }
+.tabla-conteo tbody tr.con { background: #F3FAF6; }
+.tabla-conteo tbody td, .tabla-conteo tbody th { padding: 4px 12px; }
+.tabla-conteo .den-c { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; white-space: nowrap; }
+.tabla-conteo .ico-den { color: #8A93A6; flex: 0 0 auto; }
+.tabla-conteo tr.con .ico-den { color: var(--verde); }
+.tabla-conteo td.num { font-weight: 700; white-space: nowrap; color: #6B7385; }
+.tabla-conteo tr.con td.num { color: var(--tinta); }
+.tabla-conteo .cant-in, .tabla-conteo .pesos-in { font-size: 16px; font-weight: 700; }
+.tabla-conteo .cant-in { width: 100%; max-width: 110px; box-sizing: border-box; }
+.tabla-conteo tr.con .cant-in:not(:placeholder-shown), .tabla-conteo tr.con .pesos-in:not(:placeholder-shown) { border-color: var(--verde); }
+.con-signo { position: relative; display: block; }
+.con-signo > span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gris-2); font-weight: 700; pointer-events: none; }
+.tabla-conteo .con-signo .pesos-in { width: 100%; box-sizing: border-box; padding-left: 24px; }
+.tabla-conteo td:nth-child(2) { text-align: right; width: 120px; }
+.tabla-conteo td:nth-child(3) { width: 34%; }
+.pie-conteo { display: flex; align-items: center; gap: 12px; padding: 5px 12px; background: var(--fondo-2); font-size: 14px; border-top: 1px solid var(--linea); }
+.pie-conteo .esp { flex: 1 1 auto; }
+.pie-conteo .pie-total { font-size: 17px; }
+.pie-barra { flex: 0 0 110px; height: 8px; border-radius: 999px; background: #DCE3EE; overflow: hidden; display: flex; }
+.pie-barra > span { background: var(--verde); }
+.tabla-conteo tr.error .ico-den { color: var(--terracota); }
+
+.tabla-conteo input::placeholder { color: #9AA3B5; font-weight: 400; opacity: 1; }
+.caja-fija .tabla-conteo tbody td, .caja-fija .tabla-conteo tbody th { padding: 3px 12px; }
