@@ -27,7 +27,7 @@ S.ct = { fecha: '', datos: null, cargando: false, error: '', filtro: 'dif', obs:
 
 function guardarPV() {
   const P = S.pv;
-  Almacen.guardar('pv', { lugar: P.lugar, cant: P.cant, otros: P.otros, nota: P.nota, dia: P.dia }).catch(() => {});
+  Almacen.guardar('pv', { lugar: P.lugar, cant: P.cant, otros: P.otros, nota: P.nota, dia: P.dia, nombres: P.nombres || {} }).catch(() => {});
 }
 let guardarPVt = null;
 const guardarPVpronto = () => { clearTimeout(guardarPVt); guardarPVt = setTimeout(guardarPV, 400); };
@@ -41,6 +41,7 @@ async function prepararPV() {
       const [b, lista] = await Promise.all([Almacen.leer('pv'), Almacen.leer('pvLista')]);
       if (b) {
         P.lugar = b.lugar || '';
+        P.nombres = b.nombres || {};
         if (b.dia === hoyISO()) { P.cant = b.cant || {}; P.otros = b.otros || []; P.nota = b.nota || ''; P.dia = b.dia; }
       }
       if (lista && !P.lista) P.lista = lista;
@@ -112,7 +113,7 @@ function nombrePV(codigo) {
   const L = S.pv.lista;
   const p = L && L.productos.find((x) => x.codigo === codigo);
   if (p) return p.nombre;
-  const c = (S.datos && S.datos.productos || []).find((x) => x.codigo === codigo);
+  const c = (S.datos && S.datos.productos || []).find((x) => x.codigo === codigo) || (S.pv.nombres || {})[codigo] && { nombre: S.pv.nombres[codigo] };
   return c ? c.nombre : codigo;
 }
 
@@ -232,12 +233,37 @@ VISTAS.pv = () => {
   };
 };
 
+/** "Otro producto": con señal busca en el catálogo de Siigo; sin señal, en la pestaña Productos. */
+let buscarOtroT = null;
+function buscarOtro() {
+  const P = S.pv;
+  clearTimeout(buscarOtroT);
+  const q = P.bOtro.trim();
+  if (q.length < 2 || !S.online) { P.otroRes = null; pintarOtro(); return; }
+  P.otroBuscando = true; pintarOtro();
+  buscarOtroT = setTimeout(async () => {
+    try {
+      const r = await api('buscarProductos', { q });
+      if (P.bOtro.trim() !== q) return;
+      P.otroRes = r.productos;
+    } catch (e) { P.otroRes = null; }
+    P.otroBuscando = false; pintarOtro();
+  }, 450);
+}
+function pintarOtro() {
+  if (vista() !== 'pvOtro') return;
+  const tt = document.createElement('template'); tt.innerHTML = VISTAS.pvOtro().cuerpo;
+  const nuevo = tt.content.getElementById('pv-cat'), viejo = document.getElementById('pv-cat');
+  if (nuevo && viejo) viejo.replaceWith(nuevo);
+}
+
 VISTAS.pvOtro = () => {
   const P = S.pv;
   const t = normalizar(P.bOtro);
   const ya = new Set(filasPV().map((p) => p.codigo));
   const cat = (S.datos && S.datos.productos) || [];
-  const lista = t ? cat.filter((p) => !ya.has(p.codigo) && normalizar(p.nombre + ' ' + p.codigo).includes(t)).slice(0, 40) : [];
+  const base = P.otroRes && S.online ? P.otroRes : cat.filter((p) => normalizar(p.nombre + ' ' + p.codigo).includes(t));
+  const lista = t ? base.filter((p) => !ya.has(p.codigo)).slice(0, 40) : [];
   return {
     barra: barra('Otro producto', 'Del catálogo de productos', { clase: 'pv' }),
     clase: 'pv-cuerpo',
@@ -247,6 +273,7 @@ VISTAS.pvOtro = () => {
         <input id="pv-bo" type="search" placeholder="Nombre o código" value="${h(P.bOtro)}" data-pv="bOtro" autocomplete="off" enterkeyhint="search"></div>
       <div id="pv-cat" class="pv-lista">
         ${!t ? '<p class="pv-vacio">Escribe parte del nombre o el código.</p>'
+          : P.otroBuscando && !lista.length ? '<p class="pv-vacio">Buscando en Siigo…</p>'
           : lista.length ? lista.map((p) => `<button type="button" class="pv-cat" data-accion="pvAgregar" data-cod="${h(p.codigo)}">
               <span class="pv-info"><span class="nom">${h(p.nombre)}</span><span class="sub">${h(p.codigo)}${p.unidad ? ' · ' + h(p.unidad) : ''}</span></span>
               <span class="pv-mas">${IC.mas(26)}Agregar</span></button>`).join('')
@@ -353,9 +380,11 @@ Object.assign(ACCIONES, {
     S.pv.lugar = otro; guardarPV(); render();
   },
   pvActualizar() { cargarPV(true); },
-  pvOtro() { S.pv.bOtro = ''; ir('pvOtro'); },
+  pvOtro() { S.pv.bOtro = ''; S.pv.otroRes = null; ir('pvOtro'); },
   pvAgregar(d) {
     const P = S.pv;
+    const r = (P.otroRes || []).find((x) => x.codigo === d.cod);
+    if (r) { P.nombres = P.nombres || {}; P.nombres[d.cod] = r.nombre; }
     if (P.otros.indexOf(d.cod) < 0) P.otros.unshift(d.cod);
     P.buscar = '';
     P.foco = d.cod;   // al volver, el cursor queda en su cantidad
@@ -386,16 +415,17 @@ Object.assign(ACCIONES, {
     ir('pvListo');
   },
   pvNuevo() {
-    const P = S.pv;
+    // No se vuelve a pedir la lista a Siigo: "entregado hoy" se calcula con lo de este celular (ahorra datos).
     if (S.pila.indexOf('pv') >= 0) { S.pila = S.pila.slice(0, S.pila.indexOf('pv') + 1); history.pushState({ n: S.pila.length }, ''); render(); }
     else ir('pv');
-    cargarPV(false);
     setTimeout(() => { const i = document.getElementById('pv-b'); if (i) window.scrollTo(0, 0); }, 50);
   },
   pvHoy() {
     if (vista() === 'pvHoy') return;
     ir('pvHoy');
-    cargarPV(false);
+    // Para ver los despachos de los demás, se actualiza si la lista tiene más de 5 minutos.
+    const L = listaDeHoy();
+    if (!L || Date.now() - (L._pedidoEn || 0) > 5 * 60 * 1000) cargarPV(false);
   },
   pvAnularIr(d) { S.pv.anular = { id: d.id, motivo: '' }; ir('pvAnular'); },
   pvMotivo(d) { S.pv.anular.motivo = d.t; render(); },
@@ -461,10 +491,8 @@ appEl.addEventListener('input', (e) => {
     P.nota = el.value; guardarPVpronto();
   } else if (t === 'bOtro') {
     P.bOtro = el.value;
-    const v = VISTAS.pvOtro();
-    const tt = document.createElement('template'); tt.innerHTML = v.cuerpo;
-    const nuevo = tt.content.getElementById('pv-cat'), viejo = document.getElementById('pv-cat');
-    if (nuevo && viejo) viejo.replaceWith(nuevo);
+    pintarOtro();
+    buscarOtro();
   } else if (t === 'motivo') {
     if (!P.anular) return;
     P.anular.motivo = el.value;
@@ -523,8 +551,8 @@ async function cargarContraste(forzar) {
   }
 }
 
-const COLOR_QUE = { 'Cuadra': 'ok', 'Falta entregar': 'falta', 'Entregado de más': 'mas', 'Sin venta hoy': 'sinventa', 'Fuera del catálogo': 'fuera' };
-const conDiferencia = (f) => f.que !== 'Cuadra' && f.que !== 'Fuera del catálogo';
+const COLOR_QUE = { 'Cuadra': 'ok', 'Falta entregar': 'falta', 'Entregado de más': 'mas', 'Sin venta hoy': 'sinventa', 'Servicio': 'fuera' };
+const conDiferencia = (f) => f.que !== 'Cuadra' && f.que !== 'Servicio';
 
 VISTAS.contraste = () => {
   const C = S.ct;
@@ -570,7 +598,7 @@ VISTAS.contraste = () => {
         <span><b>Falta entregar:</b> se vendió más de lo que salió del local. Puede ser normal (va en el camión o se entrega otro día) o un faltante.</span>
         <span><b>Entregado de más:</b> salió más de lo vendido hoy. Puede ser un saldo de otro día (ver la nota del despacho) o un error.</span>
         <span><b>Sin venta hoy:</b> se registró con "Otro producto".</span>
-        <span><b>Fuera del catálogo:</b> fletes, servicios o productos que no están en la pestaña Productos; no se despachan y no cuentan como diferencia (se ven en "Todos").</span>
+        <span><b>Servicio:</b> fletes, transporte y demás servicios de Siigo; no se despachan y no cuentan como diferencia (se ven en "Todos").</span>
       </section>
       <section class="panel" style="gap:8px">
         ${D.revision ? `<span class="pequeno tenue">Revisión guardada por ${h(D.revision.guardadoPor)}${D.revision.guardadoEl ? ' el ' + h(fechaCorta(D.revision.guardadoEl)) + ' a las ' + h(hora(D.revision.guardadoEl)) : ''}</span>` : ''}

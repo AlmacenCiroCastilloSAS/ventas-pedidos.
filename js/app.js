@@ -188,12 +188,23 @@ async function api(accion, cuerpo) {
 
 async function actualizarDatos() {
   const pedidoEn = Date.now();
-  const d = await api('datos');
-  d._pedidoEn = pedidoEn;
-  S.datos = d;
+  // Se manda la huella de lo que ya hay: si nada cambió, el servidor no repite los datos (ahorra datos móviles).
+  const d = await api('datos', S.datos && S.datos.hash ? { hash: S.datos.hash } : {});
+  if (d.sinCambios && S.datos) S.datos._pedidoEn = pedidoEn;
+  else { d._pedidoEn = pedidoEn; S.datos = d; }
   // Lo enviado antes de esta descarga ya viene incluido en los datos del servidor.
-  S.cola = S.cola.filter((i) => !(i.estado === 'enviado' && i.enviadoEn <= pedidoEn));
-  await Promise.all([Almacen.guardar('datos', d), guardarCola()]);
+  // Los despachos se quitan cuando ya están en la lista del Punto de venta (o son de otro día).
+  const pvCorte = (S.pv && S.pv.lista && S.pv.lista._pedidoEn) || 0;
+  const hoy = new Date().toDateString();
+  S.cola = S.cola.filter((i) => {
+    if (i.estado !== 'enviado') return true;
+    if (i.tipo === 'despacho' || i.tipo === 'anulacion_despacho') {
+      const f = new Date(i.datos.fecha_hora);
+      return f.toDateString() === hoy && i.enviadoEn > pvCorte;
+    }
+    return i.enviadoEn > pedidoEn;
+  });
+  await Promise.all([Almacen.guardar('datos', S.datos), guardarCola()]);
 }
 
 async function sincronizar(opciones) {
