@@ -647,3 +647,157 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .ed-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
 .ed-meta > b:first-child { font-size: 16px; }
 .cambios-hist details summary { cursor: pointer; color: var(--azul); font-weight: 700; }
+
+/* ==========================================================================
+   Punto de venta · pensado para usarse a pleno sol, con prisa y las manos
+   sucias: negro sobre blanco, letras grandes, bordes gruesos y botones
+   grandes y separados.
+   ========================================================================== */
+.barra.pv { background: #0E3B22; }
+.barra.pv .volver { background: #1D5C38; }
+.cuerpo.pv-cuerpo { background: #FFFFFF; color: #000000; gap: 14px; }
+.pv-cuerpo .pv-h1 { font-size: 30px; color: #000; }
+.pv-cuerpo .pv-h2 { font-size: 22px; color: #000; }
+.pv-texto { font-size: 18px; color: #111; }
+.pv-centro { align-items: center; }
+
+/* Elegir lugar */
+.pv-lugar {
+  min-height: 128px; border-radius: 20px; border: 4px solid #000; background: #FFFFFF; color: #000;
+  display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 34px; font-weight: 700;
+}
+.pv-lugar:active { background: #E3F2E8; }
+
+/* Botones de la parte de arriba */
+.pv-acciones { display: flex; gap: 10px; }
+.pv-chip {
+  flex: 1 1 0; min-height: 60px; border-radius: 14px; border: 3px solid #000; background: #FFFFFF; color: #000;
+  display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 700; padding: 0 10px;
+}
+.pv-chip b { background: #000; color: #FFF; border-radius: 999px; padding: 2px 10px; font-size: 16px; }
+.pv-estado-caja { display: flex; flex-direction: column; gap: 10px; }
+.pv-top { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: #000; }
+.pv-btn-act {
+  min-height: 56px; padding: 0 16px; border-radius: 14px; border: 3px solid #0E3B22; background: #FFFFFF; color: #0E3B22;
+  display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700;
+}
+.pv-btn-act[disabled] { border-color: #6B7280; color: #374151; }
+.pv-banner {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 14px;
+  background: #FFE066; border: 3px solid #000; color: #000; font-size: 17px;
+}
+.pv-banner svg { flex: 0 0 auto; }
+.pv-banner.error { background: #FFFFFF; border-color: #9A3412; color: #7C2D12; }
+
+/* Buscador */
+.pv-buscar {
+  display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 14px;
+  border: 3px solid #000; border-radius: 16px; background: #FFFFFF; color: #000;
+}
+.pv-buscar input { flex: 1 1 auto; min-width: 0; border: 0; outline: none; font-size: 21px; background: transparent; color: #000; }
+.pv-buscar input::placeholder { color: #4B5563; }
+
+/* Lista de productos */
+.pv-lista { display: flex; flex-direction: column; gap: 10px; }
+.pv-fila {
+  display: flex; align-items: center; gap: 10px; min-height: 88px; padding: 10px 10px 10px 12px;
+  border: 3px solid #6B7280; border-radius: 16px; background: #FFFFFF;
+}
+.pv-fila.con { border: 4px solid #0E3B22; background: #E3F2E8; }
+.pv-fila.otro { border-style: dashed; }
+.pv-fila.con.otro { border-style: solid; }
+.pv-marca {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 999px; border: 3px solid #6B7280;
+  display: flex; align-items: center; justify-content: center; color: transparent;
+}
+.pv-fila.con .pv-marca { background: #0E3B22; border-color: #0E3B22; color: #FFFFFF; }
+.pv-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.pv-info .nom { font-size: 20px; font-weight: 700; color: #000; line-height: 1.2; overflow-wrap: anywhere; }
+.pv-info .sub { font-size: 16px; color: #1F2937; }
+.pv-info .sub b { color: #000; }
+.pv-tag { background: #000; color: #FFF; border-radius: 6px; padding: 1px 6px; font-size: 14px; }
+.pv-cant {
+  flex: 0 0 104px; width: 104px; height: 70px; border: 3px solid #000; border-radius: 14px; background: #FFFFFF;
+  text-align: center; font-size: 30px; font-weight: 700; color: #000; padding: 0 4px;
+}
+.pv-cant::placeholder { color: #9CA3AF; font-weight: 400; }
+.pv-fila.con .pv-cant { border-color: #0E3B22; border-width: 4px; }
+.pv-cant:focus { box-shadow: 0 0 0 5px #FFD54A; outline: none; }
+.pv-quitar {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 12px; border: 3px solid #000; background: #FFFFFF; color: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.pv-vacio { padding: 18px 14px; border: 3px dashed #6B7280; border-radius: 16px; font-size: 18px; color: #111; text-align: center; }
+
+.pv-otro {
+  min-height: 68px; border-radius: 16px; border: 3px dashed #000; background: #FFFFFF; color: #000;
+  display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 700;
+}
+.pv-nota { display: flex; flex-direction: column; gap: 6px; }
+.pv-nota label { font-size: 19px; font-weight: 700; color: #000; }
+.pv-nota label span { font-weight: 400; color: #1F2937; }
+.pv-nota textarea {
+  min-height: 84px; border: 3px solid #000; border-radius: 14px; padding: 10px 12px; font-size: 19px; color: #000; background: #FFF; resize: vertical;
+}
+
+/* Pie: resumen y botón principal */
+.pv-resumen { text-align: center; font-size: 18px; color: #000; }
+.btn.pv-ok { background: #0E3B22; min-height: 76px; font-size: 24px; border-radius: 18px; }
+.btn.pv-ok[disabled] { background: #D1D5DB; color: #1F2937; }
+
+/* Catálogo ("Otro producto") */
+.pv-cat {
+  display: flex; align-items: center; gap: 10px; min-height: 80px; padding: 10px 14px; text-align: left;
+  border: 3px solid #000; border-radius: 16px; background: #FFFFFF; color: #000;
+}
+.pv-mas { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; font-size: 18px; font-weight: 700; color: #0E3B22; }
+
+/* Confirmación */
+.pv-ok-icono { width: 104px; height: 104px; border-radius: 999px; background: #0E3B22; color: #FFFFFF; display: flex; align-items: center; justify-content: center; margin-top: 8px; }
+.pv-resumen-lista, .pv-desp-lineas { align-self: stretch; display: flex; flex-direction: column; border: 3px solid #000; border-radius: 16px; padding: 4px 14px; background: #FFF; }
+.pv-resumen-lista > div, .pv-desp-lineas > div { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; border-bottom: 2px solid #D1D5DB; font-size: 19px; color: #000; }
+.pv-resumen-lista > div:last-child, .pv-desp-lineas > div:last-child { border-bottom: 0; }
+.pv-resumen-lista span, .pv-desp-lineas span { flex: 1 1 auto; min-width: 0; }
+.pv-resumen-lista b, .pv-desp-lineas b { font-size: 24px; }
+.pv-nota-ver { align-self: stretch; padding: 10px 14px; border-radius: 14px; background: #F3F4F6; border: 2px solid #6B7280; font-size: 18px; color: #000; display: flex; flex-direction: column; gap: 2px; }
+.pv-nota-ver span { font-size: 15px; color: #1F2937; }
+
+/* Despachos de hoy */
+.pv-desp { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 3px solid #000; border-radius: 18px; background: #FFF; }
+.pv-desp .pv-desp-lineas { border-width: 2px; }
+.pv-desp-cab { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; font-size: 17px; color: #111; }
+.pv-desp-cab b { font-size: 22px; color: #000; }
+.pv-desp-nota { font-size: 17px; color: #111; padding: 8px 10px; background: #F3F4F6; border-radius: 10px; }
+.pv-estado { margin-left: auto; border-radius: 999px; padding: 3px 12px; font-size: 15px; font-weight: 700; border: 2px solid #000; }
+.pv-estado.pend { background: #FFE066; color: #000; }
+.pv-estado.anulado { background: #FFFFFF; color: #7C2D12; border-color: #7C2D12; }
+.pv-desp.anulado { border-color: #6B7280; background: #F3F4F6; }
+.pv-desp.anulado .pv-desp-lineas { text-decoration: line-through; background: #F3F4F6; }
+.pv-anular {
+  min-height: 56px; border-radius: 14px; border: 3px solid #7C2D12; background: #FFFFFF; color: #7C2D12;
+  display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 700;
+}
+.pv-motivos { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pv-motivo { min-height: 60px; border-radius: 14px; border: 3px solid #000; background: #FFF; color: #000; font-size: 19px; font-weight: 700; padding: 0 14px; text-align: left; }
+.pv-motivo.sel { background: #000; color: #FFF; }
+
+/* PC · Vendido contra entregado */
+.ct-tabla { border: 2px solid var(--borde); border-radius: 12px; overflow: hidden; background: #FFF; }
+.ct-tabla table { width: 100%; border-collapse: collapse; }
+.ct-tabla thead th { background: var(--verde); color: #FFF; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; text-align: left; padding: 9px 12px; }
+.ct-tabla thead th.num { text-align: right; }
+.ct-tabla td { padding: 9px 12px; border-top: 1px solid var(--linea); vertical-align: top; }
+.ct-tabla td.num { text-align: right; white-space: nowrap; }
+.ct-tabla td.grande { font-size: 18px; }
+.ct-tabla td.dif { font-weight: 700; }
+.ct-pill { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.ct-falta .ct-pill { background: var(--amarillo-suave); border: 1px solid var(--amarillo-borde); }
+.ct-mas { background: #FFF8F5; }
+.ct-mas .ct-pill { background: var(--terracota-suave); color: var(--terracota-texto); }
+.ct-mas td.dif { color: var(--terracota-texto); }
+.ct-sinventa .ct-pill { background: var(--azul-suave); color: var(--azul); }
+.ct-ok .ct-pill { background: var(--verde-suave); color: var(--verde); }
+.ct-pie { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .ct-pie { grid-template-columns: 1fr; } }
+.ct-fuera { color: var(--gris); }
+.ct-fuera .ct-pill { background: var(--fondo-2); color: var(--gris); border: 1px solid var(--borde); }

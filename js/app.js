@@ -465,9 +465,9 @@ VISTAS.inicio = () => {
         ${IC.camion(56)}
         <span><span class="nombre">Camión</span><br><span class="desc">Recorrido: cargue, entregas y pedidos</span></span>
       </button>
-      <button type="button" class="modo punto" disabled aria-disabled="true">
+      <button type="button" class="modo punto" data-accion="irPV">
         ${IC.tienda(56)}
-        <span><span class="nombre">Punto de venta</span> <span class="etiqueta">Próximamente</span><br><span class="desc">Entregas en el local y desde bodega</span></span>
+        <span><span class="nombre">Punto de venta</span><br><span class="desc">Despachos en el local y la bodega</span></span>
       </button>
       ${esPC() ? `<button type="button" class="modo conta" data-accion="irCaja">
         <span class="fila">${IC.conta(40)}<span><span class="nombre" style="font-size:26px">Contabilidad</span><br><span class="desc">Cuadre de caja con Siigo</span></span></span>
@@ -923,7 +923,7 @@ VISTAS.stock = () => {
 };
 
 /* ---------- Pendientes por enviar ---------- */
-const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido', anulacion: 'Anulación de recorrido', bodega: 'Movimiento de bodega' };
+const NOMBRE_TIPO = { cliente: 'Cliente nuevo', recorrido: 'Apertura de recorrido', pedido: 'Pedido', entrega: 'Entrega', cierre: 'Cierre de recorrido', anulacion: 'Anulación de recorrido', bodega: 'Movimiento de bodega', despacho: 'Despacho (punto de venta)', anulacion_despacho: 'Anulación de despacho' };
 VISTAS.cola = () => {
   const E = calcular();
   const items = S.cola.filter((i) => i.usuario === yo().id).slice().reverse();
@@ -935,6 +935,8 @@ VISTAS.cola = () => {
     if (i.tipo === 'cierre') return d.id_recorrido;
     if (i.tipo === 'anulacion') return `${d.id_recorrido} · Motivo: ${d.motivo}`;
     if (i.tipo === 'bodega') return `${d.clase === 'entrada' ? 'Entrada' : 'Ajuste por conteo'} · ${d.ubicacion} · ${d.lineas.length} producto(s)`;
+    if (i.tipo === 'despacho') return `${d.lugar} · ${d.lineas.length} producto(s) · ${fmt(d.lineas.reduce((a, l) => a + l.cantidad, 0))} unidades${d.nota ? ' · ' + d.nota : ''}`;
+    if (i.tipo === 'anulacion_despacho') return `${d.id_despacho} · Motivo: ${d.motivo}`;
     const c = E.cliMap[d.id_cliente];
     return `${c ? c.nombre : 'Cliente ' + d.id_cliente} · ${fmt(d.lineas.reduce((a, l) => a + l.cantidad, 0))} unidades`;
   };
@@ -1571,7 +1573,7 @@ function refrescarEstado(terminado) {
   document.querySelectorAll('[data-chip]').forEach((el) => { el.outerHTML = chip(); });
   if (!terminado || !S.sesion) return;
   const escribiendo = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-  const dependen = ['cola', 'listo', 'inicio', 'camion', 'admin', 'ajustes', 'cierre'];
+  const dependen = ['cola', 'listo', 'inicio', 'camion', 'admin', 'ajustes', 'cierre', 'pvHoy'];
   if (escribiendo || dependen.indexOf(vista()) < 0) return;
   const v = (VISTAS[vista()] || VISTAS.inicio)();
   if (sinChip(htmlVista(v)) !== S.htmlSinChip) render();

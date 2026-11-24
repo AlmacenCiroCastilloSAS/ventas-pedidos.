@@ -173,10 +173,11 @@ function navConta(activa) {
   const sub = (accion, texto, sel) => `<button type="button" class="conta-sub ${sel ? 'sel' : ''}" data-accion="${accion}" ${sel ? 'aria-current="page"' : ''}>${texto}</button>`;
   return `<nav class="conta-nav" aria-label="Módulos">
     ${item('irInicio', '', IC.camion(22), 'Camión', false)}
-    ${item('', '', IC.tienda(22), 'Punto de venta', false, true)}
+    ${item('irPV', '', IC.tienda(22), 'Punto de venta', false)}
     <span class="conta-item sel-grupo">${IC.conta(22)}Contabilidad</span>
     ${sub('irCaja', 'Cuadre de caja', activa === 'caja')}
     ${sub('irCajaHist', 'Historial de cuadres', activa === 'cajaHist')}
+    ${esAdmin() ? sub('irContraste', 'Vendido contra entregado', activa === 'contraste') : ''}
     ${esAdmin() ? item('irPanel', '', IC.panel(22), 'Panel de control', false) : ''}
   </nav>`;
 }
