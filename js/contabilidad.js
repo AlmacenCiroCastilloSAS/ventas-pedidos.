@@ -178,6 +178,7 @@ function navConta(activa) {
     ${sub('irCaja', 'Cuadre de caja', activa === 'caja')}
     ${sub('irCajaHist', 'Historial de cuadres', activa === 'cajaHist')}
     ${esAdmin() ? sub('irContraste', 'Vendido contra entregado', activa === 'contraste') : ''}
+    ${esAdmin() ? sub('irCemento', 'Control de cemento', activa === 'cemento') : ''}
     ${esAdmin() ? item('irPanel', '', IC.panel(22), 'Panel de control', false) : ''}
   </nav>`;
 }
