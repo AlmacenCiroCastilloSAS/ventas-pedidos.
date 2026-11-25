@@ -402,7 +402,8 @@ Object.assign(ACCIONES, {
       C.regs = {}; r.registros.forEach((x) => { C.regs[x.fecha] = x; });
       Almacen.guardar('cemento', { regs: C.regs, archivo: C.archivo }).catch(() => {});
       if (C.fecha === fecha) cemLlenarForm(C.regs[fecha]);
-      aviso(r.corregido ? `Corrección del ${fechaCortaISO(fecha)} guardada${r.cambios ? ' (' + r.cambios + ' cambio' + (r.cambios === 1 ? '' : 's') + ' en la pestaña Cambios)' : ''}.` : `Día ${fechaCortaISO(fecha)} guardado en el historial.`);
+      if (r.respaldo) aviso('Día guardado. ' + r.respaldo, true);
+      else aviso(r.corregido ? `Corrección del ${fechaCortaISO(fecha)} guardada${r.cambios ? ' (' + r.cambios + ' cambio' + (r.cambios === 1 ? '' : 's') + ' en la pestaña Cambios)' : ''}.` : `Día ${fechaCortaISO(fecha)} guardado en el historial.`);
     } catch (e) {
       if (e.codigo === 'NO_AUTORIZADO') S.sesionVencida = true;
       aviso(e.codigo === 'RED' ? 'No se pudo guardar: sin conexión. Intenta de nuevo.' : e.message, true);
