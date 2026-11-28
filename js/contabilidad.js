@@ -422,7 +422,7 @@ function filasMovs(movs) {
 function detalleNC(m) {
   if (m.nc) {
     const x = m.nc;
-    if (x.tipo === 'correccion') return `↩ Reversa la ${h(x.factura)} · forma de pago ${h(m.formaPago || '')}`;
+    if (x.tipo === 'correccion') return `↩ Reversa la ${h(x.factura)} · ${x.segunCorreccion ? 'nota con forma de pago ' + h(x.formaPago) + ': se resta el efectivo de la factura original' : 'forma de pago ' + h(m.formaPago || '')}`;
     return `<span class="pastilla dev">Devolución en efectivo</span> <span class="tenue">de la ${h(x.factura || 'factura')}${x.facturaFecha ? ' (' + h(fechaCortaISO(x.facturaFecha)) + ')' : ''}${x.segunFactura ? ' · sin forma de pago en Siigo: se tomó la de la factura' : ''}</span>`;
   }
   if (m.reemplazaA) return `<span class="tenue">Reemplaza a la ${h(m.reemplazaA)}${detalleMov(m) ? ' · ' + h(detalleMov(m)) : ''}</span>`;
