@@ -344,21 +344,26 @@ function htmlMovs(C, K) {
   if (C.edicion) return htmlMovsEd(C, K);
   const sg = K.sg;
   const abierto = C.movsAbierto;
+  const movs = sg ? sg.movimientos : [];
+  const correcciones = movs.filter((m) => m.nc && m.nc.tipo === 'correccion');
+  const devoluciones = movs.filter((m) => m.nc && m.nc.tipo !== 'correccion');
+  const sinCaja = (sg && sg.notasSinCaja) || [];
+  const plural = (n, a, b) => n + ' ' + (n === 1 ? a : b);
   const resumen = sg
-    ? `${sg.movimientos.length} movimiento(s) · entradas ${pesos(sg.entradas)} · salidas ${pesos(sg.salidas)}${sg.movimientos.some((m) => m.alerta) ? ` · ${sg.movimientos.filter((m) => m.alerta).length} alerta(s)` : ''}`
+    ? `${movs.length} movimiento(s) · entradas ${pesos(sg.entradas)} · salidas ${pesos(sg.salidas)}`
+      + (correcciones.length ? ' · ' + plural(correcciones.length, 'corrección de factura', 'correcciones de factura') : '')
+      + (devoluciones.length ? ' · ' + plural(devoluciones.length, 'devolución en efectivo', 'devoluciones en efectivo') : '')
+      + (movs.some((m) => m.alerta) ? ` · ${movs.filter((m) => m.alerta).length} alerta(s)` : '')
     : C.cargando ? 'Consultando Siigo…' : 'Sin datos de Siigo';
   let cuerpo = '';
   if (abierto) {
     if (!sg) cuerpo = `<p class="tenue">${C.cargando ? 'Consultando Siigo, puede tardar unos segundos…' : 'Todavía no hay datos de Siigo para esta fecha.'}</p>`;
-    else if (!sg.movimientos.length) cuerpo = '<p class="tenue">Siigo no tiene movimientos de caja en este día' + (sg.hora ? ' hasta las ' + h(sg.hora) : '') + '.</p>';
+    else if (!movs.length && !sinCaja.length) cuerpo = '<p class="tenue">Siigo no tiene movimientos de caja en este día' + (sg.hora ? ' hasta las ' + h(sg.hora) : '') + '.</p>';
     else {
-      cuerpo = `<div class="tabla-caja"><table>
-        <thead><tr><th>Comprobante</th><th>Tercero</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
-        <tbody>${sg.movimientos.map((m) => `<tr>
-          <td><b>${h(m.comprobante)}</b></td><td>${h(m.nombre || m.ident)}</td><td class="tenue detalle-mov">${h(detalleMov(m))}</td>
-          <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num">${m.salida ? pesos(m.salida) : ''}</td>
-          <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`).join('')}</tbody>
-      </table></div>`;
+      cuerpo = (movs.length ? `<div class="tabla-caja"><table>
+        <thead><tr><th>Hora</th><th>Comprobante</th><th>Tercero</th><th>Detalle</th><th class="num">Entrada</th><th class="num">Salida</th><th>Alerta</th></tr></thead>
+        <tbody>${filasMovs(movs)}</tbody>
+      </table></div>` : '') + htmlNotasSinCaja(sinCaja);
     }
   }
   return `<section class="panel" id="caja-movs">
@@ -370,6 +375,67 @@ function htmlMovs(C, K) {
     </button>
     ${abierto ? `<div id="caja-movs-lista">${cuerpo}</div>` : ''}
   </section>`;
+}
+
+/**
+ * Filas de la tabla de movimientos. Una corrección de factura (factura
+ * original + nota crédito + factura nueva) se muestra junta, en un bloque con
+ * su efecto neto en la caja; una devolución en efectivo lleva su etiqueta.
+ */
+function filasMovs(movs) {
+  const fila = (m, clase, sub) => `<tr class="${clase || ''}">
+    <td class="tenue">${h(m.hora || '')}</td>
+    <td><b>${h(m.comprobante)}</b>${sub ? `<br><span class="tenue pequeno">${sub}</span>` : ''}</td>
+    <td>${h(m.nombre || m.ident)}</td>
+    <td class="detalle-mov">${detalleNC(m)}</td>
+    <td class="num">${m.entrada ? pesos(m.entrada) : ''}</td><td class="num ${m.nc && m.nc.tipo !== 'correccion' ? 'sal-dev' : ''}">${m.salida ? pesos(m.salida) : ''}</td>
+    <td>${m.alerta ? `<span class="pastilla error">${h(m.alerta)}</span>` : ''}</td></tr>`;
+  // Grupos de corrección: la nota y sus dos facturas (si están en el día).
+  const grupoDe = {};
+  movs.filter((m) => m.nc && m.nc.tipo === 'correccion').forEach((n) => {
+    const g = { nota: n, original: movs.find((m) => m.origen === 'FV' && m.comprobante === n.nc.factura) || null,
+      nueva: movs.find((m) => m.origen === 'FV' && m.comprobante === n.nc.reemplazo) || null };
+    [g.nota, g.original, g.nueva].forEach((m) => { if (m) grupoDe[m.origen + m.comprobante] = g; });
+  });
+  const hechos = new Set();
+  return movs.map((m) => {
+    const g = grupoDe[m.origen + m.comprobante];
+    if (!g) return fila(m, m.nc ? 'fila-dev' : '');
+    if (hechos.has(g)) return '';
+    hechos.add(g);
+    const partes = [g.original, g.nota, g.nueva].filter(Boolean);
+    // Efecto de la corrección: la nota (resta) más la factura nueva (suma). La factura
+    // original es la venta que ya existía; si la nueva vale lo mismo, el efecto es $ 0.
+    const neto = [g.nota, g.nueva].filter(Boolean).reduce((a, x) => a + (x.entrada || 0) - (x.salida || 0), 0);
+    const netoTxt = Math.abs(neto) < 0.005 ? '$ 0' : conSigno(neto);
+    const otroDia = !g.original ? ` · la factura ${h(g.nota.nc.factura)} es${g.nota.nc.facturaFecha ? ' del ' + h(fechaCortaISO(g.nota.nc.facturaFecha)) : ' de otro día'}` : '';
+    return `<tr class="grp-cab"><td colspan="7"><span class="grp-t"><b>Corrección de factura</b>
+        <span>${h(g.nota.nombre || g.nota.ident)} · ${partes.length} documentos · se rehízo la factura${otroDia}</span>
+        <span class="grow"></span><span class="grp-neto ${Math.abs(neto) < 0.005 ? '' : 'dif'}">Efecto neto en caja: ${netoTxt}</span></span></td></tr>`
+      + (g.original ? fila(g.original, 'grp', 'factura original') : '')
+      + fila(g.nota, 'grp', 'nota crédito')
+      + (g.nueva ? fila(g.nueva, 'grp grp-fin', 'factura nueva') : '');
+  }).join('');
+}
+
+/** Detalle de un movimiento; las notas crédito y sus facturas llevan su relación. */
+function detalleNC(m) {
+  if (m.nc) {
+    const x = m.nc;
+    if (x.tipo === 'correccion') return `↩ Reversa la ${h(x.factura)} · forma de pago ${h(m.formaPago || '')}`;
+    return `<span class="pastilla dev">Devolución en efectivo</span> <span class="tenue">de la ${h(x.factura || 'factura')}${x.facturaFecha ? ' (' + h(fechaCortaISO(x.facturaFecha)) + ')' : ''}${x.segunFactura ? ' · sin forma de pago en Siigo: se tomó la de la factura' : ''}</span>`;
+  }
+  if (m.reemplazaA) return `<span class="tenue">Reemplaza a la ${h(m.reemplazaA)}${detalleMov(m) ? ' · ' + h(detalleMov(m)) : ''}</span>`;
+  return `<span class="tenue">${h(detalleMov(m))}</span>`;
+}
+
+/** Notas crédito del día que no movieron efectivo (no cuentan en el cuadre). */
+function htmlNotasSinCaja(lista) {
+  if (!lista.length) return '';
+  return `<div class="nc-info"><b>Notas crédito que no movieron efectivo (${lista.length}) · no cuentan en el cuadre</b>
+    ${lista.map((n) => `<span class="nc-info-f"><b>${h(n.comprobante)}</b><span>${h(n.nombre || n.ident)}</span>
+      <span class="tenue">Sobre la ${h(n.factura || 'factura')}${n.facturaContado ? ' (de contado)' : ''} · forma de pago ${h(n.formaPago)}</span>
+      <span class="grow"></span><span>${pesos(n.total)}</span></span>`).join('')}</div>`;
 }
 
 function htmlResultado(C, K) {
@@ -387,6 +453,7 @@ function htmlResultado(C, K) {
       ${fila('Base de caja al abrir', K.base !== null ? pesos(K.base) : '—')}
       ${fila('Entradas en Siigo', sg ? '+ ' + pesos(sg.entradas) : '—')}
       ${fila('Salidas en Siigo', sg ? '− ' + pesos(sg.salidas) : '—')}
+      ${sg && sg.notasCredito ? `<div class="fila-des sub"><span>de ellas, notas crédito</span><b>${pesos(sg.notasCredito)}</b></div>` : ''}
       ${fila('Debe haber', K.debe !== null ? pesos(K.debe) : '—', true)}
       ${fila('Caja menor', pesos(K.menor))}
       ${fila('Cajón + caja fuerte + monedas', pesos(K.resto))}

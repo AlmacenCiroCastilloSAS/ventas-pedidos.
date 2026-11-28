@@ -857,3 +857,20 @@ tr.detalle-fila td { background: var(--fondo-2); }
 .cem-tabla tbody tr:focus { outline: none; box-shadow: inset 0 0 0 3px var(--amarillo); }
 .btn-borde.chico { min-height: 38px; font-size: 15px; }
 .txt-error { color: var(--terracota); font-weight: 700; }
+
+/* ---- Notas crédito en los movimientos de caja ---- */
+.tabla-caja tr.grp-cab td { background: #EAF2FB; border-top: 2px solid #8FB3E0; border-left: 6px solid #0B3D91; padding: 10px 12px 8px; }
+.grp-t { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.grp-t > b { color: #0B3D91; font-size: 16px; }
+.grp-neto { border-radius: 999px; padding: 3px 12px; background: #FFFFFF; border: 2px solid #0B3D91; color: #0B3D91; font-weight: 700; white-space: nowrap; }
+.grp-neto.dif { border-color: var(--terracota); color: var(--terracota-texto); }
+.tabla-caja tr.grp td { background: #F5F9FE; }
+.tabla-caja tr.grp td:first-child { border-left: 6px solid #0B3D91; }
+.tabla-caja tr.grp-fin td { border-bottom: 2px solid #8FB3E0; }
+.tabla-caja tr.fila-dev td { background: #FFF8F5; }
+.tabla-caja tr.fila-dev td:first-child { border-left: 6px solid #7C2D12; }
+.tabla-caja td.sal-dev { color: #7C2D12; font-weight: 700; }
+.pastilla.dev { background: #FDEEE6; color: #7C2D12; }
+.nc-info { margin-top: 10px; padding: 12px 14px; border: 2px solid var(--linea); border-radius: 12px; background: #FAFBFD; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.nc-info-f { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.fila-des.sub { font-size: 14px; color: var(--gris-2); padding-left: 12px; }
